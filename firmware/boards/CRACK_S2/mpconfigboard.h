@@ -12,5 +12,12 @@
 #define MICROPY_HW_UART_REPL_BAUD   115200
 
 // Disable USB device stack so OTG peripheral is free for usb_host
+#define MICROPY_HW_ENABLE_USBDEV    0
 #define MICROPY_HW_USB_CDC          0
 #define MICROPY_PY_MACHINE_USB_DEVICE 0
+
+// No Bluetooth on ESP32-S2
+#define MICROPY_PY_BLUETOOTH 0
+
+// No SDMMC host peripheral on ESP32-S2
+#define MICROPY_HW_ENABLE_SDCARD 0
