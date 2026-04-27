@@ -15,4 +15,4 @@ idf.py \
   -D USER_C_MODULES="$MODULES_CMAKE" \
   build
 
-echo "Firmware: $MP_DIR/ports/esp32/build-CRACK_S2/firmware.bin"
+echo "Firmware: $MP_DIR/ports/esp32/build/micropython.bin"
