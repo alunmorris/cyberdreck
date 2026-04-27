@@ -95,10 +95,11 @@ static void parse_hid_report(const uint8_t* data, size_t len) {
         int type = EV_NONE; char ch = 0;
         if      (ctrl && code == 0x11) type = EV_NEW_CONV;
         else if (ctrl && code == 0x10) type = EV_MORE;
+        // ↑/PgUp = scroll to newer (down in history) — matches SLUG hal_s2.cpp convention
         else if (code == 0x52)         type = EV_SCROLL_DOWN;
         else if (code == 0x51)         type = EV_SCROLL_UP;
-        else if (code == 0x4B)         type = EV_SCROLL_DOWN;
-        else if (code == 0x4E)         type = EV_SCROLL_UP;
+        else if (code == 0x4B)         type = EV_SCROLL_DOWN;  // PgUp
+        else if (code == 0x4E)         type = EV_SCROLL_UP;    // PgDn
         else if (code == 0x4A)         type = EV_MODEL_MENU;
         else if (code == 0x4C)         type = EV_DELETE;
         else if (code == 0x39)         { s_caps_lock = !s_caps_lock; s_leds_dirty = true; continue; }
@@ -106,7 +107,7 @@ static void parse_hid_report(const uint8_t* data, size_t len) {
         else if (code == 0x4F)         type = EV_CURSOR_RIGHT;
         else if (code == 0x28)         type = EV_ENTER;
         else if (code == 0x2A)         type = EV_BACKSPACE;
-        else { char c = hid_to_ascii(code, shifted, s_caps_lock); if (c) { type = EV_CHAR; ch = c; } }
+        else if (!ctrl) { char c = hid_to_ascii(code, shifted, s_caps_lock); if (c) { type = EV_CHAR; ch = c; } }
         if (type != EV_NONE) rb_push(type, ch);
     }
 }
@@ -162,7 +163,6 @@ static bool find_hid_ep(usb_device_handle_t dev,
 }
 
 static SemaphoreHandle_t s_ctrl_done = NULL;
-static SemaphoreHandle_t s_idle_done = NULL;
 static SemaphoreHandle_t s_led_done  = NULL;
 
 static void ctrl_cb(usb_transfer_t* t) {
@@ -186,10 +186,18 @@ static esp_err_t ctrl_xfer(uint8_t req_type, uint8_t req, uint16_t val, uint16_t
     ctrl->callback = ctrl_cb;
     ctrl->context = (void*)s_ctrl_done;
     esp_err_t err = usb_host_transfer_submit_control(s_client, ctrl);
-    if (err == ESP_OK) xSemaphoreTake(s_ctrl_done, pdMS_TO_TICKS(1000));
+    if (err != ESP_OK) {
+        usb_host_transfer_free(ctrl);
+        return err;
+    }
+    BaseType_t got = xSemaphoreTake(s_ctrl_done, pdMS_TO_TICKS(1000));
+    if (got != pdTRUE) {
+        // Timeout: transfer still in-flight, cannot safely free — accept leak
+        return ESP_ERR_TIMEOUT;
+    }
     esp_err_t st = (ctrl->status == USB_TRANSFER_STATUS_COMPLETED) ? ESP_OK : ESP_FAIL;
     usb_host_transfer_free(ctrl);
-    return (err == ESP_OK) ? st : err;
+    return st;
 }
 
 static void open_device(uint8_t addr) {
@@ -285,7 +293,6 @@ static mp_obj_t usbhid_init(void) {
     if (rb_mutex) return mp_const_none;
     rb_mutex     = xSemaphoreCreateMutex();
     s_ctrl_done  = xSemaphoreCreateBinary();
-    s_idle_done  = xSemaphoreCreateBinary();
     s_led_done   = xSemaphoreCreateBinary();
     xTaskCreate(usb_host_daemon_task, "usb_host",   4096, NULL, 5, NULL);
     xTaskCreate(usb_client_task,      "usb_client", 4096, NULL, 4, NULL);
