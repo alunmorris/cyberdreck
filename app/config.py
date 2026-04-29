@@ -1,5 +1,5 @@
 # app/config.py
-VERSION = "28 Apr 2026"
+VERSION = "29 Apr 2026a"
 
 # Hardware
 LED_PIN    = 15          # active-high GPIO LED

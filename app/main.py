@@ -54,6 +54,7 @@ def show_model_menu():
     _tft.write(font14, "Select model:", 2, 0, 0x03E0, bg)
     for idx, (key, label, _, __, ___) in enumerate(items):
         _tft.write(font14, f"{key} {label[:36]}", 2, (idx + 1) * config.LINE_H, 0xFFFF, bg)
+    _tft.write(font14, "m MicroPython REPL", 2, (len(items) + 2) * config.LINE_H, 0xFFFF, bg)
 
     while True:
         ev = hal_kb.poll()
@@ -61,14 +62,19 @@ def show_model_menu():
             time.sleep_ms(20)
             continue
         ev_type, ch = ev
-        if ev_type == hal_kb.INPUT_CHAR and ch.isdigit():
-            for key, label, grok, groq, gidx in items:
-                if ch == key:
-                    _use_grok   = grok
-                    _use_groq   = groq
-                    _gemini_idx = gidx
-                    history.add('ai', f"Model: {label}", display_only=True)
-                    return
+        if ev_type == hal_kb.INPUT_CHAR:
+            if ch == 'm':
+                import repl_term
+                repl_term.run(_tft, hal_kb)
+                return False   # back to model menu if run() ever exits
+            if ch.isdigit():
+                for key, label, grok, groq, gidx in items:
+                    if ch == key:
+                        _use_grok   = grok
+                        _use_groq   = groq
+                        _gemini_idx = gidx
+                        history.add('ai', f"Model: {label}", display_only=True)
+                        return False
 
 # ── WiFi connect flow ──────────────────────────────────────────────────────────
 def ensure_wifi():
@@ -242,7 +248,8 @@ def loop():
             elif ev_type == hal_kb.INPUT_NEW_CONV:
                 _new_conv(); redraw = False
             elif ev_type == hal_kb.INPUT_MODEL_MENU:
-                show_model_menu(); _refresh(); redraw = False
+                if show_model_menu(): return
+                _refresh(); redraw = False
             else:
                 redraw = False
             if redraw:
@@ -299,9 +306,11 @@ def main():
         _rssi = None
         _c3line(config.LINE_H, "WiFi: not connected", config.COL_ERROR)
     time.sleep(1)
-    show_model_menu()
+    if show_model_menu():
+        return
     _last_activity = time.ticks_ms()
     _refresh()
     loop()
 
 main()
+# After main() returns (REPL selected), MicroPython drops to interactive REPL on UART.
