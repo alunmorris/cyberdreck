@@ -4,7 +4,7 @@ MP_DIR=$HOME/micropython
 IDF_DIR=$HOME/esp-idf
 PROJ_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BOARD_DIR="$PROJ_DIR/firmware/boards/CRACK_S2"
-MODULES_CMAKE="$PROJ_DIR/firmware/usbhid/micropython.cmake"
+MODULES_CMAKE="$PROJ_DIR/firmware/usbhid/micropython.cmake;$PROJ_DIR/firmware/st7789_mpy/micropython.cmake"
 
 source "$IDF_DIR/export.sh"
 cd "$MP_DIR/ports/esp32"

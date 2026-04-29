@@ -1,9 +1,11 @@
 # app/config.py
+VERSION = "28 Apr 2026"
+
 # Hardware
 LED_PIN    = 15          # active-high GPIO LED
 SCREEN_W   = 320
 SCREEN_H   = 240
-LINE_H     = 18          # pixel height per text row (14px font + 4px leading)
+LINE_H     = 16          # pixel height per text row (13px font + 3px leading)
 
 # Layout
 HIST_H     = SCREEN_H - LINE_H   # chat history area height (222px)
@@ -34,18 +36,17 @@ HTTPS_PORT  = 443
 
 # Models
 GEMINI_MODELS = [
-    "gemini-2.5-flash-preview-04-17",
-    "gemini-2.5-pro-preview-05-06",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
+    "gemini-3.1-pro-preview",
 ]
-GROK_MODEL  = "grok-3-fast-beta"
-GROQ_MODEL  = "qwen/qwen3-32b"
+GROK_MODEL  = "grok-3-fast"
+GROQ_MODEL  = "openai/gpt-oss-120b"
 
 # System prompt (120-word limit)
 SYSTEM_PROMPT = (
-    "Respond in 120 words or fewer. Plain text only: no markdown, "
-    "no ** or * emphasis, no tables, no bullet symbols, no numbered or unnumbered lists. "
-    "Use paragraphs to separate distinct ideas. Never include URLs, hyperlinks, citations, "
-    "footnotes, source references, or attribution of any kind."
+    "You are displayed on a 240x320 pixel screen. Respond in 80 words or fewer. "
+    "Plain text only: no markdown, no ** or * emphasis, no tables, no bullet symbols, "
+    "no numbered or unnumbered lists. Use paragraphs to separate distinct ideas. "
+    "Never include URLs, hyperlinks, citations, footnotes, source references, or attribution of any kind."
 )

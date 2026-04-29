@@ -1,61 +1,59 @@
 # app/main.py
-import time, gc
+import esp
+esp.osdebug(None)   # suppress ESP-IDF log output on UART so mpremote can enter raw REPL
+
+import time, gc, _thread
 from machine import Pin
 
 import display, ui, history, wifi_mgr, api, config, hal_kb, secrets
-import fonts.dejavu14 as font14
-from writer import Writer
+import fonts.dejavu14_ru as font14
 
 # ── State ──────────────────────────────────────────────────────────────────────
-_input_buf  = []       # list of chars
-_cursor     = 0        # insertion point
-_more_mode  = False    # True after AI reply
-_invert     = True     # light theme
+_input_buf  = []
+_cursor     = 0
+_more_mode  = False
 
-# Active model selection
-_use_grok  = False
-_use_groq  = False
-_gemini_idx = 0        # index into config.GEMINI_MODELS
+_use_grok   = False
+_use_groq   = False
+_gemini_idx = 0
 
-_tft  = None
-_wri  = None
+_tft        = None
 _wifi_ok    = False
-_last_activity = 0
+_rssi       = None
+_last_activity   = 0
 _last_wifi_check = 0
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-def _active_model_label():
-    if _use_grok:  return config.GROK_MODEL
-    if _use_groq:  return config.GROQ_MODEL
-    return config.GEMINI_MODELS[_gemini_idx]
-
-def _c3line(y, text, fg=0x0000, bg=0xC618):
-    Writer.set_textpos(_tft, y, 2)
-    _wri.set_textcolor(fg, bg)
-    _wri.printstring(text)
+def _c3line(y, text, fg=0xFFFF, bg=0x0000):
+    _tft.write(font14, text, 2, y, fg, bg)
 
 def _refresh():
     history.rebuild_lines(measure_fn=ui._measure)
     ui.draw_history()
-    ui.draw_input_bar(''.join(_input_buf), _cursor, _wifi_ok)
+    ui.draw_input_bar(''.join(_input_buf), _cursor, _rssi)
 
-def _set_led(on):
-    hal_kb.set_led(on)
+def _new_conv():
+    global _more_mode
+    history.clear()
+    _input_buf.clear()
+    _cursor_set(0)
+    _more_mode = False
+    _refresh()
 
 # ── Model menu ─────────────────────────────────────────────────────────────────
 def show_model_menu():
-    """Display model selection menu; block until a valid key is pressed."""
     global _use_grok, _use_groq, _gemini_idx
-    bg = 0xC618
+    bg = 0x0000
     _tft.fill(bg)
     items = []
     for i, m in enumerate(config.GEMINI_MODELS, 1):
         items.append((str(i), m, False, False, i - 1))
-    items.append(('5', config.GROK_MODEL,  True,  False, 0))
-    items.append(('6', config.GROQ_MODEL,  False, True,  0))
-    _c3line(0, "Select model:", 0x03E0, bg)
+    n = len(config.GEMINI_MODELS)
+    items.append((str(n + 1), config.GROK_MODEL,  True,  False, 0))
+    items.append((str(n + 2), config.GROQ_MODEL,  False, True,  0))
+    _tft.write(font14, "Select model:", 2, 0, 0x03E0, bg)
     for idx, (key, label, _, __, ___) in enumerate(items):
-        _c3line((idx + 1) * config.LINE_H, f"{key} {label[:36]}", 0x0000, bg)
+        _tft.write(font14, f"{key} {label[:36]}", 2, (idx + 1) * config.LINE_H, 0xFFFF, bg)
 
     while True:
         ev = hal_kb.poll()
@@ -66,15 +64,14 @@ def show_model_menu():
         if ev_type == hal_kb.INPUT_CHAR and ch.isdigit():
             for key, label, grok, groq, gidx in items:
                 if ch == key:
-                    _use_grok  = grok
-                    _use_groq  = groq
+                    _use_grok   = grok
+                    _use_groq   = groq
                     _gemini_idx = gidx
                     history.add('ai', f"Model: {label}", display_only=True)
                     return
 
 # ── WiFi connect flow ──────────────────────────────────────────────────────────
 def ensure_wifi():
-    """Ensure WiFi is connected, running AP scan flow if needed. Returns True."""
     global _wifi_ok
     if wifi_mgr.is_connected():
         _wifi_ok = True
@@ -83,26 +80,20 @@ def ensure_wifi():
     if wifi_mgr._creds:
         ssid = wifi_mgr._creds[0]['ssid']
         pwd  = wifi_mgr._creds[0]['pass']
-        if wifi_mgr.connect(ssid, pwd, show_status=True):
+        if wifi_mgr.connect(ssid, pwd):
             _wifi_ok = True
-            _set_led(True)
+            hal_kb.set_led(True)
             return True
-    # AP scan flow
-    ok = wifi_mgr.select_ap(_tft, _wri)
+    ok = wifi_mgr.select_ap(_tft)
     _wifi_ok = ok
     if ok:
-        _set_led(True)
+        hal_kb.set_led(True)
     return ok
 
-# ── Send prompt ────────────────────────────────────────────────────────────────
-def send_prompt():
-    global _more_mode, _wifi_ok
-    text = ''.join(_input_buf).strip()
-    if not text:
-        return
-    _input_buf.clear()
-    _cursor_set(0)
-    history.add('user', text)
+# ── API call ───────────────────────────────────────────────────────────────────
+def _call_api(prompt):
+    global _more_mode
+    history.add('user', prompt)
     _refresh()
 
     if not ensure_wifi():
@@ -110,29 +101,84 @@ def send_prompt():
         _refresh()
         return
 
-    history.add('ai', "...", display_only=True)
+    history.add('ai', '.', display_only=True)
     _refresh()
 
-    try:
-        msgs = history.get_messages()
-        if _use_grok:
-            reply = api.call_grok(msgs, secrets.GROK_KEY)
-        elif _use_groq:
-            reply = api.call_groq(msgs, secrets.GROQ_KEY)
-        else:
-            reply = api.call_gemini(msgs, config.GEMINI_MODELS[_gemini_idx], secrets.GEMINI_KEY)
-    except Exception as e:
-        reply = f"Error: {e}"
-    finally:
-        # Remove the "..." placeholder
-        if history._messages and history._messages[-1].get('display_only'):
-            history._messages.pop()
-            history._total_bytes -= 3
+    result = [None]
+    done   = [False]
 
-    history.add('ai', reply)
+    def _api_thread():
+        try:
+            msgs = history.get_messages()
+            for attempt in range(2):
+                try:
+                    if _use_grok:
+                        result[0] = api.call_grok(msgs, secrets.GROK_KEY)
+                    elif _use_groq:
+                        result[0] = api.call_groq(msgs, secrets.GROQ_KEY)
+                    else:
+                        result[0] = api.call_gemini(msgs, config.GEMINI_MODELS[_gemini_idx], secrets.GEMINI_KEY)
+                    break
+                except OSError as e:
+                    if attempt == 0 and 'dns:' in str(e):
+                        time.sleep_ms(1000)
+                        continue
+                    raise
+        except Exception as e:
+            result[0] = f"Error: {e}"
+        done[0] = True
+
+    _thread.start_new_thread(_api_thread, ())
+
+    dots = 1
+    last_dot = time.ticks_ms()
+    while not done[0]:
+        if time.ticks_diff(time.ticks_ms(), last_dot) >= 4000:
+            dots += 1
+            if history._messages and history._messages[-1].get('display_only'):
+                history._messages[-1]['text'] = '.' * dots
+                history.rebuild_lines(measure_fn=ui._measure)
+                ui.draw_history()
+            last_dot = time.ticks_ms()
+        time.sleep_ms(100)
+
+    if history._messages and history._messages[-1].get('display_only'):
+        dot_len = len(history._messages[-1]['text'])
+        history._messages.pop()
+        history._total_bytes -= dot_len
+
+    reply = result[0] or "Error: no response"
+    history.add('ai', reply, display_only=reply.startswith("Error:"))
     _more_mode = True
     _refresh()
     gc.collect()
+
+# ── Send prompt ────────────────────────────────────────────────────────────────
+def send_prompt():
+    text = ''.join(_input_buf).strip()
+
+    if text == 'new':
+        _input_buf.clear(); _cursor_set(0)
+        _new_conv()
+        return
+    if text == 'more':
+        _input_buf.clear(); _cursor_set(0)
+        _call_api('Tell me more')
+        return
+    if text == 'menu':
+        _input_buf.clear(); _cursor_set(0)
+        show_model_menu(); _new_conv()
+        return
+
+    if not text:
+        if not history._messages:
+            return
+        _call_api('Tell me more')
+        return
+
+    _input_buf.clear()
+    _cursor_set(0)
+    _call_api(text)
 
 # ── Input buffer helpers ───────────────────────────────────────────────────────
 def _cursor_set(pos):
@@ -140,96 +186,119 @@ def _cursor_set(pos):
     _cursor = max(0, min(pos, len(_input_buf)))
 
 def _insert_char(ch):
+    global _more_mode
+    _more_mode = False
     _input_buf.insert(_cursor, ch)
     _cursor_set(_cursor + 1)
 
 def _delete_back():
+    global _more_mode
     if _cursor > 0:
         _input_buf.pop(_cursor - 1)
         _cursor_set(_cursor - 1)
+        if not _input_buf and history._messages:
+            _more_mode = True
 
 def _delete_fwd():
+    global _more_mode
     if _cursor < len(_input_buf):
         _input_buf.pop(_cursor)
+        if not _input_buf and history._messages:
+            _more_mode = True
 
 # ── Main event loop ────────────────────────────────────────────────────────────
 def loop():
-    global _last_activity, _last_wifi_check, _wifi_ok, _more_mode
+    global _last_activity, _last_wifi_check, _wifi_ok, _rssi, _more_mode
     while True:
         ev = hal_kb.poll()
         if ev is not None:
             _last_activity = time.ticks_ms()
             ev_type, ch = ev
             redraw = True
-            if   ev_type == hal_kb.INPUT_CHAR:
-                _insert_char(ch)
-            elif ev_type == hal_kb.INPUT_BACKSPACE:
-                _delete_back()
-            elif ev_type == hal_kb.INPUT_DELETE:
-                _delete_fwd()
-            elif ev_type == hal_kb.INPUT_CURSOR_LEFT:
-                _cursor_set(_cursor - 1)
-            elif ev_type == hal_kb.INPUT_CURSOR_RIGHT:
-                _cursor_set(_cursor + 1)
+            if   ev_type == hal_kb.INPUT_CHAR:         _insert_char(ch)
+            elif ev_type == hal_kb.INPUT_BACKSPACE:    _delete_back()
+            elif ev_type == hal_kb.INPUT_DELETE:       _delete_fwd()
+            elif ev_type == hal_kb.INPUT_CURSOR_LEFT:  _cursor_set(_cursor - 1)
+            elif ev_type == hal_kb.INPUT_CURSOR_RIGHT: _cursor_set(_cursor + 1)
             elif ev_type == hal_kb.INPUT_ENTER:
-                send_prompt()
+                send_prompt(); redraw = False
+            elif ev_type == hal_kb.INPUT_MORE:
+                if _more_mode: _call_api('Tell me more')
                 redraw = False
             elif ev_type == hal_kb.INPUT_SCROLL_UP:
-                history.scroll_up(); history.rebuild_lines(measure_fn=ui._measure)
-                ui.draw_history(); redraw = False
+                old = history.scroll_offset
+                history.scroll_down(config.MAX_VIS // 2)
+                if history.scroll_offset != old:
+                    history.rebuild_lines(measure_fn=ui._measure)
+                    ui.draw_history()
+                redraw = False
             elif ev_type == hal_kb.INPUT_SCROLL_DOWN:
-                history.scroll_down(); history.rebuild_lines(measure_fn=ui._measure)
-                ui.draw_history(); redraw = False
+                old = history.scroll_offset
+                history.scroll_up(config.MAX_VIS // 2)
+                if history.scroll_offset != old:
+                    history.rebuild_lines(measure_fn=ui._measure)
+                    ui.draw_history()
+                redraw = False
             elif ev_type == hal_kb.INPUT_NEW_CONV:
-                history.clear(); _input_buf.clear(); _cursor_set(0)
-                _more_mode = False; _refresh(); redraw = False
+                _new_conv(); redraw = False
             elif ev_type == hal_kb.INPUT_MODEL_MENU:
                 show_model_menu(); _refresh(); redraw = False
             else:
                 redraw = False
             if redraw:
-                ui.draw_input_bar(''.join(_input_buf), _cursor, _wifi_ok)
+                ui.draw_input_bar(''.join(_input_buf), _cursor, _rssi)
 
-        # WiFi idle disconnect (60s without activity)
         now = time.ticks_ms()
-        if (time.ticks_diff(now, _last_wifi_check) > 2000 and wifi_mgr.is_connected()):
+        if time.ticks_diff(now, _last_wifi_check) > 2000:
             _last_wifi_check = now
-            idle_s = time.ticks_diff(now, _last_activity) / 1000
-            if idle_s > config.WIFI_IDLE_TIMEOUT:
-                wifi_mgr.disconnect()
+            if wifi_mgr.is_connected():
+                _rssi = wifi_mgr.rssi()
+                if time.ticks_diff(now, _last_activity) / 1000 > config.WIFI_IDLE_TIMEOUT:
+                    wifi_mgr.disconnect()
+                    _wifi_ok = False
+                    _rssi = None
+                    hal_kb.set_led(False)
+            elif _wifi_ok:
                 _wifi_ok = False
-                _set_led(False)
-        elif not wifi_mgr.is_connected() and _wifi_ok:
-            _wifi_ok = False
-            _set_led(False)
+                _rssi = None
+                hal_kb.set_led(False)
 
         time.sleep_ms(10)
 
 # ── Boot sequence ──────────────────────────────────────────────────────────────
 def main():
-    global _tft, _wri
+    global _tft
     _tft = display.init()
-    _wri = Writer(_tft, font14)
     ui.init(_tft)
 
-    bg = 0xC618
-    _c3line(0, "CRACK — USB keyboard init...", 0x0000, bg)
-
-    found = hal_kb.init(timeout_ms=5000)
-    if not found:
-        _c3line(config.LINE_H, "Keyboard not found!", 0xF800, bg)
-        time.sleep(2)
+    _tft.fill(0x0000)
+    _c3line(0, f"CRACK {config.VERSION}")
 
     wifi_mgr.load_creds()
-
-    # Check for pre-seeded default credentials from secrets.py
     try:
         if secrets.WIFI_SSID_DEFAULT and not wifi_mgr._creds:
             wifi_mgr.insert_cred(secrets.WIFI_SSID_DEFAULT, secrets.WIFI_PASS_DEFAULT)
     except AttributeError:
         pass
 
+    _c3line(config.LINE_H, "WiFi: connecting...")
+    _c3line(config.LINE_H * 2, "USB keyboard init...")
+
+    found = hal_kb.init(timeout_ms=5000)
+    if not found:
+        _c3line(config.LINE_H * 2, "Keyboard not found!", 0xF800)
+        time.sleep(2)
+
+    global _rssi
     ensure_wifi()
+    if wifi_mgr.is_connected():
+        _rssi = wifi_mgr.rssi()
+        ssid  = wifi_mgr._wlan.config('ssid')
+        _c3line(config.LINE_H, f"WiFi: {ssid[:20]} {_rssi}dBm")
+    else:
+        _rssi = None
+        _c3line(config.LINE_H, "WiFi: not connected", config.COL_ERROR)
+    time.sleep(1)
     show_model_menu()
     _last_activity = time.ticks_ms()
     _refresh()

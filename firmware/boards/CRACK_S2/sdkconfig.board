@@ -1,8 +1,10 @@
 # firmware/boards/CRACK_S2/sdkconfig.board
-# Console on UART0, not USB
-CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+# Console on UART0, custom pins (GPIO1=TX, GPIO2=RX) so header pins are accessible via UART adapter
+CONFIG_ESP_CONSOLE_UART_CUSTOM=y
 CONFIG_ESP_CONSOLE_UART_NUM=0
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
+CONFIG_ESP_CONSOLE_UART_TX_GPIO=33
+CONFIG_ESP_CONSOLE_UART_RX_GPIO=21
 
 # Disable USB device (CDC/serial) so OTG peripheral is free for usb_host
 CONFIG_ESP_CONSOLE_USB_CDC=n
@@ -20,3 +22,13 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_BT_ENABLED=n
 CONFIG_BLUEDROID_ENABLED=n
 CONFIG_NIMBLE_ENABLED=n
+
+# OUT buffer kept small (we only send short requests).
+# IN buffer at default — PSRAM absorbs the cost; 6144 was too small
+# for Google's certificate chain, causing EPERM on ssl.wrap_socket().
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+
+# Lower the always-internal threshold so mbedTLS context (~4-8KB) goes to
+# PSRAM instead of fragmenting internal SRAM between SSL calls.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096

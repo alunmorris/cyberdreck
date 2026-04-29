@@ -76,28 +76,24 @@ def scan_aps():
             seen[ssid] = rssi_val
     return sorted(seen.items(), key=lambda x: -x[1])[:9]
 
-def _draw_ap_list(aps, tft, wri):
-    from writer import Writer
+def _draw_ap_list(aps, tft):
+    import fonts.dejavu14_ru as font14
     bg = config.COL_INVERT_BG
     tft.fill(bg)
-    Writer.set_textpos(tft, 0, 2)
-    wri.set_textcolor(0x03E0, bg)
-    wri.printstring("Select WiFi:")
+    tft.write(font14, "Select WiFi:", 2, 0, 0x03E0, bg)
     for i, (ssid, db) in enumerate(aps):
         y = (i + 1) * config.LINE_H
         if y + config.LINE_H > config.SCREEN_H:
             break
-        Writer.set_textpos(tft, y, 2)
-        wri.set_textcolor(0x0000, bg)
-        wri.printstring(f"{i+1} {ssid[:22]} {db}dB")
+        tft.write(font14, f"{i+1} {ssid[:22]} {db}dB", 2, y, 0x0000, bg)
 
-def ap_picker(tft, wri):
+def ap_picker(tft):
     """Scan and show AP list. Returns (ssid, rssi) or None."""
     from hal_kb import poll, INPUT_CHAR, INPUT_ENTER
     aps = scan_aps()
     if not aps:
         return None
-    _draw_ap_list(aps, tft, wri)
+    _draw_ap_list(aps, tft)
     while True:
         ev = poll()
         if ev is None:
@@ -111,19 +107,14 @@ def ap_picker(tft, wri):
         if ev_type == INPUT_ENTER:
             return None
 
-def enter_password(ssid, tft, wri):
+def enter_password(ssid, tft):
     """Show password entry. Returns typed password."""
     from hal_kb import poll, INPUT_CHAR, INPUT_BACKSPACE, INPUT_ENTER, INPUT_CURSOR_LEFT, INPUT_CURSOR_RIGHT
-    from writer import Writer
-    import ui
+    import ui, fonts.dejavu14_ru as font14
     bg = config.COL_INVERT_BG
     tft.fill(bg)
-    Writer.set_textpos(tft, 0, 2)
-    wri.set_textcolor(0xFFE0, bg)
-    wri.printstring("Password for:")
-    Writer.set_textpos(tft, config.LINE_H, 2)
-    wri.set_textcolor(0x0000, bg)
-    wri.printstring(ssid[:36])
+    tft.write(font14, "Password for:", 2, 0, 0xFFE0, bg)
+    tft.write(font14, ssid[:36], 2, config.LINE_H, 0x0000, bg)
     buf = []; cursor = 0
     while True:
         ui.draw_input_bar(''.join(buf), cursor)
@@ -143,14 +134,14 @@ def enter_password(ssid, tft, wri):
         elif ev_type == INPUT_CURSOR_RIGHT and cursor < len(buf):
             cursor += 1
 
-def select_ap(tft, wri):
+def select_ap(tft):
     """Full flow: scan -> pick -> password -> connect. Returns True if connected."""
-    choice = ap_picker(tft, wri)
+    choice = ap_picker(tft)
     if choice is None:
         return False
     ssid, _ = choice
     stored = find_pass(ssid)
-    password = stored if stored is not None else enter_password(ssid, tft, wri)
+    password = stored if stored is not None else enter_password(ssid, tft)
     ok = connect(ssid, password, show_status=True)
     if ok:
         insert_cred(ssid, password)

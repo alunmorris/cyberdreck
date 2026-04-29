@@ -1,10 +1,10 @@
 # app/history.py
-from config import MAX_LINES, COL_AI, COL_USER, COL_ERROR, SCREEN_W
+from config import MAX_LINES, MAX_VIS, COL_AI, COL_USER, COL_ERROR, SCREEN_W
 
 # Each message: {'role': 'user'|'ai'|'error', 'text': str, 'display_only': bool}
 _messages      = []
 _total_bytes   = 0
-HEAP_BUDGET    = 8000    # max total text bytes before evicting oldest pair
+HEAP_BUDGET    = 64000   # max total text bytes before evicting oldest pair
 
 # Rendered line cache
 lines         = []
@@ -20,10 +20,10 @@ def add(role, text, display_only=False):
     safe = []
     for ch in text:
         o = ord(ch)
-        if ch == '\n' or (0x20 <= o <= 0x7E):
+        if o == 0x7F:
+            continue   # DEL — drop
+        if o >= 0x20 or ch == '\n':
             safe.append(ch)
-        elif o > 0x7E:
-            safe.append('?')
     text = ''.join(safe)
     if not text:
         return
@@ -78,10 +78,10 @@ def rebuild_lines(measure_fn=None):
         if len(lines) >= MAX_LINES - 1:
             break
 
-def scroll_up():
+def scroll_up(n=1):
     global scroll_offset
-    scroll_offset = min(scroll_offset + 1, max(0, len(lines) - 1))
+    scroll_offset = min(scroll_offset + n, max(0, len(lines) - MAX_VIS))
 
-def scroll_down():
+def scroll_down(n=1):
     global scroll_offset
-    scroll_offset = max(scroll_offset - 1, 0)
+    scroll_offset = max(scroll_offset - n, 0)

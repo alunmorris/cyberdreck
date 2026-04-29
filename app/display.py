@@ -25,13 +25,14 @@ _tft = None
 
 def init():
     global _tft
-    spi = SPI(1, baudrate=4_000_000, polarity=0, phase=0,
+    spi = SPI(1, baudrate=40_000_000, polarity=0, phase=0,
               sck=Pin(36), mosi=Pin(35), miso=Pin(37))
     _tft = st7789.ST7789(spi, 240, 320,
         reset=Pin(18, Pin.OUT),
         cs=Pin(34, Pin.OUT),
         dc=Pin(17, Pin.OUT),
-        rotation=1)
+        rotation=1,
+        buffer_size=1024)
     _tft.init()
     _tft.fill(LIGHT_GREY)
     return _tft

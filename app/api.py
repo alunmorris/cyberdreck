@@ -1,5 +1,5 @@
 # app/api.py
-import socket, ssl, json, config
+import socket, ssl, json, gc, config
 
 def _https_post(host, path, headers, body_dict):
     """POST body_dict as JSON to https://host/path. Returns response body string."""
@@ -15,40 +15,76 @@ def _https_post(host, path, headers, body_dict):
         req_lines.append(f"{k}: {v}")
     req_lines += ["", ""]
     req = "\r\n".join(req_lines).encode() + body_bytes
+    del body_bytes
 
-    addr = socket.getaddrinfo(host, config.HTTPS_PORT)[0][-1]
+    gc.collect()
+    try:
+        addr = socket.getaddrinfo(host, config.HTTPS_PORT)[0][-1]
+    except OSError as e:
+        raise OSError(f"dns:{e}")
     s = socket.socket()
     s.settimeout(config.API_TIMEOUT_MS / 1000)
-    s.connect(addr)
-    s = ssl.wrap_socket(s, server_hostname=host)
-    s.write(req)
+    try:
+        s.connect(addr)
+    except OSError as e:
+        s.close(); raise OSError(f"conn:{e}")
+    try:
+        s = ssl.wrap_socket(s, server_hostname=host)
+    except OSError as e:
+        s.close(); raise OSError(f"ssl:{e}")
 
-    raw = b""
+    gc.collect()
+
+    # ssl.write() can return a partial byte count (capped at SSL OUT buffer).
+    # Loop to ensure the full request is sent.
+    mv = memoryview(req)
+    sent = 0
+    try:
+        while sent < len(req):
+            n = s.write(mv[sent:])
+            if not n:
+                raise OSError("write stalled")
+            sent += n
+    except OSError as e:
+        s.close(); raise OSError(f"write:{e}")
+    del mv, req; gc.collect()
+
+    chunks = []
+    read_err = None
     try:
         while True:
-            chunk = s.read(1024)
+            chunk = s.read(512)
             if not chunk:
                 break
-            raw += chunk
-    except OSError:
-        pass
+            chunks.append(bytes(chunk))
+    except OSError as e:
+        read_err = e
     finally:
         s.close()
+    s = None
+    gc.collect()
+
+    raw = b''.join(chunks)
+    del chunks; gc.collect()
+
+    if not raw:
+        raise OSError(f"read:{read_err}" if read_err else "read:empty")
 
     sep = raw.find(b"\r\n\r\n")
     if sep < 0:
-        raise ValueError("No HTTP header separator")
+        raise ValueError(f"No HTTP header ({len(raw)}B)")
     status_line = raw[:raw.find(b"\r\n")].decode()
     if " 200 " not in status_line:
         raise ValueError(f"HTTP error: {status_line[:80]}")
-    body = raw[sep + 4:]
     header_block = raw[:sep].decode().lower()
+    body = bytes(raw[sep + 4:])
+    del raw; gc.collect()
     if "transfer-encoding: chunked" in header_block:
         body = _unchunk(body)
     return body.decode('utf-8', 'replace')
 
 def _unchunk(data):
-    out = b""
+    out = bytearray()
     while data:
         end = data.find(b"\r\n")
         if end < 0:
@@ -58,7 +94,7 @@ def _unchunk(data):
             break
         out += data[end + 2: end + 2 + size]
         data = data[end + 2 + size + 2:]
-    return out
+    return bytes(out)
 
 def _build_gemini_body(messages, model):
     contents = []
@@ -68,14 +104,15 @@ def _build_gemini_body(messages, model):
     return {
         "system_instruction": {"parts": [{"text": config.SYSTEM_PROMPT}]},
         "contents": contents,
-        "generationConfig": {"maxOutputTokens": 300},
+        "generationConfig": {"maxOutputTokens": 120},
     }
 
 def call_gemini(messages, model, api_key):
     path = f"/v1beta/models/{model}:generateContent?key={api_key}"
     body = _build_gemini_body(messages, model)
     resp = _https_post(config.GEMINI_HOST, path, {}, body)
-    data = json.loads(resp)
+    del body; gc.collect()
+    data = json.loads(resp); del resp
     return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
 def _build_openai_body(messages, model):
@@ -83,18 +120,20 @@ def _build_openai_body(messages, model):
     for m in messages:
         role = "user" if m['role'] == 'user' else "assistant"
         msgs.append({"role": role, "content": m['text']})
-    return {"model": model, "messages": msgs, "max_tokens": 300}
+    return {"model": model, "messages": msgs, "max_tokens": 120}
 
 def call_grok(messages, api_key):
     body = _build_openai_body(messages, config.GROK_MODEL)
     resp = _https_post(config.GROK_HOST, "/v1/chat/completions",
                        {"Authorization": f"Bearer {api_key}"}, body)
-    data = json.loads(resp)
+    del body; gc.collect()
+    data = json.loads(resp); del resp
     return data["choices"][0]["message"]["content"].strip()
 
 def call_groq(messages, api_key):
     body = _build_openai_body(messages, config.GROQ_MODEL)
     resp = _https_post(config.GROQ_HOST, "/openai/v1/chat/completions",
                        {"Authorization": f"Bearer {api_key}"}, body)
-    data = json.loads(resp)
+    del body; gc.collect()
+    data = json.loads(resp); del resp
     return data["choices"][0]["message"]["content"].strip()
