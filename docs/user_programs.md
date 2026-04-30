@@ -24,7 +24,9 @@ These names are available without importing:
 |---|---|---|
 | `print` | function | Writes to TFT display (see below) |
 | `tft` | object | Raw display driver |
-| `font14` | module | DejaVu 14px font |
+| `font14` | module | DejaVu Sans 14px — proportional |
+| `mono13` | module | NotoSansMono 13px — monospaced |
+| `_TFTTerminal` | class | Terminal emulator (see below) |
 | `config` | module | Screen dimensions, colours, etc. |
 | `time` | module | `sleep`, `sleep_ms`, `ticks_ms`, … |
 | `sys` | module | |
@@ -155,6 +157,37 @@ config.COL_ERROR    # 0xF800  red
 ```
 
 Mix `tft` drawing with `print` freely — they share the same display.
+
+### Monospaced terminal
+
+`print()` uses the proportional `font14` by default. For aligned columns and box
+drawing, create a `_TFTTerminal` with `mono13` and use it directly:
+
+```python
+tft.fill(0x0000)
+term = _TFTTerminal(tft, None, font=mono13)
+
+def mprint(*args, **kwargs):
+    sep = kwargs.get('sep', ' ')
+    end = kwargs.get('end', '\n')
+    term.write(sep.join(str(a) for a in args) + end)
+
+mprint("+-------------------+")
+mprint("| Counter:          |")
+mprint("| Status:           |")
+mprint("+-------------------+")
+
+import time
+for i in range(100):
+    done = (i == 99)
+    mprint(f"\x1b[3A\x1b[2K| Counter: {i:<9}|", end="\n")
+    mprint(f"\x1b[2K| Status:  {'done   ' if done else 'running':<9}|", end="\n")
+    mprint("\x1b[2K+-------------------+", end="")
+    time.sleep_ms(100)
+```
+
+`_TFTTerminal(tft, None, font=mono13)` — pass `None` for `kb` since the terminal
+class does not poll the keyboard itself.
 
 ---
 

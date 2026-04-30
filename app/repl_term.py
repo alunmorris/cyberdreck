@@ -2,6 +2,7 @@
 """Interactive Python REPL on TFT display + USB keyboard."""
 import sys, time, config
 import fonts.dejavu14_ru as font14
+import fonts.mono13 as mono13
 
 _BUF_LINES = 200
 _MAX_CHARS  = 42
@@ -14,9 +15,10 @@ _HIDDEN = frozenset({
 
 
 class _TFTTerminal:
-    def __init__(self, tft, kb):
+    def __init__(self, tft, kb, font=None):
         self._tft      = tft
         self._kb       = kb
+        self._font     = font or font14
         self._lines    = [['', config.COL_AI]]
         self._scroll   = 0
         self._col      = 0   # write column in current line
@@ -30,14 +32,14 @@ class _TFTTerminal:
         y = view_pos * config.LINE_H
         self._tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0x0000)
         if text:
-            self._tft.write(font14, text[:_MAX_CHARS], 2, y, color, 0x0000)
+            self._tft.write(self._font, text[:_MAX_CHARS], 2, y, color, 0x0000)
 
     def _full_redraw(self):
         self._tft.fill(0x0000)
         start = self._view_start()
         for i, (line, col) in enumerate(self._lines[start : start + config.MAX_VIS]):
             if line:
-                self._tft.write(font14, line[:_MAX_CHARS], 2, i * config.LINE_H, col, 0x0000)
+                self._tft.write(self._font, line[:_MAX_CHARS], 2, i * config.LINE_H, col, 0x0000)
 
     def scroll_up(self, n=1):
         max_scroll = max(0, len(self._lines) - config.MAX_VIS)
@@ -389,7 +391,9 @@ def show_file_picker(tft, kb):
                     ns = dict(globals())
                     ns.update({'__name__': '__main__', 'gc': gc,
                                'machine': machine, 'network': network,
-                               'print': _print, 'tft': tft, 'font14': font14})
+                               'print': _print, 'tft': tft,
+                               'font14': font14, 'mono13': mono13,
+                               '_TFTTerminal': _TFTTerminal})
                     result = [None]
                     def _run():
                         try:
