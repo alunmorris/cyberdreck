@@ -209,3 +209,4 @@ except Exception as e:
 - **Memory**: call `gc.collect()` before allocating large buffers. `gc.mem_free()` returns available heap bytes.
 - **Exit cleanly**: at the top level of a MicroPython script, execution simply ends — the file picker resumes normally.
 - **Avoid `input()`**: there is no stdin; use the keyboard via `hal_kb` if you need interactive input (`import hal_kb; hal_kb.poll()`).
+- **GPIO**: `machine.Pin`, `I2C`, `SPI`, `ADC`, `PWM`, `UART`, and `Timer` are all available via `from machine import ...`. GPIO15 is the app status LED (`config.LED_PIN`) — avoid it in user programs.
