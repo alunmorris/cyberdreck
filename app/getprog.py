@@ -1,4 +1,5 @@
 # getprog.py — download user programs from github.com/alunmorris/crack-programs
+#300426 Change exit text to 'Menu'
 import socket, ssl, json, gc
 import wifi_mgr
 
@@ -48,7 +49,7 @@ def _ensure_wifi():
 
 
 def run(tft, kb):
-    import config, time
+    import config, time, uos
     import fonts.dejavu14_ru as font14
 
     tft.fill(0x0000)
@@ -74,7 +75,7 @@ def run(tft, kb):
         return
 
     sel    = 0
-    n      = len(manifest) + 1   # entries + Cancel
+    n      = len(manifest) + 1   # entries + Menu
     ENTRY_H = 2                  # rows per entry: filename + description
 
     def _draw(status=""):
@@ -93,7 +94,7 @@ def run(tft, kb):
         fg = 0x0000 if sel == len(manifest) else 0x07E0
         bg = 0xFFFF if sel == len(manifest) else 0x0000
         tft.fill_rect(0, cancel_y, config.SCREEN_W, config.LINE_H, bg)
-        tft.write(font14, "Cancel", 2, cancel_y, fg, bg)
+        tft.write(font14, "Menu", 2, cancel_y, fg, bg)
         if status:
             sy = (1 + len(manifest) * ENTRY_H) * config.LINE_H
             if sy < cancel_y:
@@ -135,3 +136,13 @@ def run(tft, kb):
             except Exception as e:
                 _draw("Error: " + str(e)[:30])
                 time.sleep(3)
+        elif t == kb.INPUT_DELETE:
+            if sel < len(manifest):
+                fname = manifest[sel]['file']
+                try:
+                    uos.remove("/" + fname)
+                    _draw(f"Deleted /{fname}")
+                except OSError:
+                    _draw(f"{fname} not on device")
+                time.sleep(2)
+                _draw()
