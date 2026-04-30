@@ -187,6 +187,74 @@ config.COL_ERROR    # 0xF800  red
 
 ---
 
+## Network / API access
+
+WiFi is usually already connected when a user program runs. Check first with `wifi_mgr`:
+
+```python
+import wifi_mgr
+
+if not wifi_mgr.is_connected():
+    wifi_mgr.load_creds()
+    c = wifi_mgr._creds[0]
+    wifi_mgr.connect(c['ssid'], c['pass'])
+```
+
+### HTTPS JSON API
+
+`api._https_post` handles SSL, chunked transfer encoding, and memory-efficient reads.
+Use it for any HTTPS JSON API:
+
+```python
+import api, json
+
+resp = api._https_post(
+    "api.example.com",                      # host
+    "/v1/endpoint",                         # path
+    {"Authorization": "Bearer TOKEN"},      # extra headers (dict)
+    {"key": "value"}                        # request body (dict → JSON)
+)
+data = json.loads(resp)
+print(data["result"])
+```
+
+### Call the built-in AI APIs
+
+The app's API keys are in `secrets`. You can call Gemini, Grok, or Groq directly:
+
+```python
+import api, secrets
+
+msgs = [{"role": "user", "text": "Hello"}]
+
+# Gemini
+reply = api.call_gemini(msgs, "gemini-3.1-flash-lite-preview", secrets.GEMINI_KEY)
+
+# Grok
+reply = api.call_grok(msgs, secrets.GROK_KEY)
+
+# Groq
+reply = api.call_groq(msgs, secrets.GROQ_KEY)
+
+print(reply)
+```
+
+### Plain HTTP GET
+
+No helper exists for plain HTTP — use raw sockets:
+
+```python
+import socket
+
+s = socket.socket()
+s.connect(socket.getaddrinfo("example.com", 80)[0][-1])
+s.send(b"GET / HTTP/1.0\r\nHost: example.com\r\n\r\n")
+print(s.recv(1024).decode())
+s.close()
+```
+
+---
+
 ## Error handling
 
 If your program raises an unhandled exception the exception type and message are shown in red, and **"Enter to exit"** appears. Press **Enter** to return to the file picker.
@@ -209,4 +277,4 @@ except Exception as e:
 - **Memory**: call `gc.collect()` before allocating large buffers. `gc.mem_free()` returns available heap bytes.
 - **Exit cleanly**: at the top level of a MicroPython script, execution simply ends — the file picker resumes normally.
 - **Avoid `input()`**: there is no stdin; use the keyboard via `hal_kb` if you need interactive input (`import hal_kb; hal_kb.poll()`).
-- **GPIO**: `machine.Pin`, `I2C`, `SPI`, `ADC`, `PWM`, `UART`, and `Timer` are all available via `from machine import ...`. GPIO15 is the app status LED (`config.LED_PIN`) — avoid it in user programs.
+- **GPIO**: `machine.Pin`, `I2C`, `SPI`, `ADC`, `PWM`, `UART`, and `Timer` are all available via `from machine import ...`. GPIO15 is the app status LED on ESP32-S2 mini (`config.LED_PIN`) — avoid it in user programs.
