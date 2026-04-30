@@ -129,9 +129,9 @@ From `config`:
 | `config.SCREEN_W` | 320 | Pixels wide |
 | `config.SCREEN_H` | 240 | Pixels tall |
 | `config.LINE_H` | 16 | Pixels per text row |
-| `config.MAX_VIS` | 13 | Visible text rows |
+| `config.MAX_VIS` | 14 | Visible text rows |
 
-The terminal occupies the full screen (13 rows of 42 characters). The bottom row is reserved for the **"Enter to exit"** prompt when the program ends.
+The terminal occupies the full screen (14 rows of 42 characters). The bottom row is reserved for the **"Enter to exit"** prompt when the program ends.
 
 ---
 
