@@ -1,6 +1,8 @@
 # Writing User Programs for CRACK
+##Date: 30 Apr 2026
 
-User programs are plain MicroPython `.py` files stored in the root of the device filesystem. They are launched from the model menu via **r → Run a program**.
+User programs are plain MicroPython (v1.24.1)`.py` files stored in the root of the device filesystem. 
+They are launched from the model menu via **r → Run a program**.
 
 ---
 
