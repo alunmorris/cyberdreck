@@ -104,11 +104,11 @@ If you include an explicit `\n` in the string **and** let `print` add one (`end=
 ```python
 import time
 
-# Draw a fixed layout
-print("┌─────────────────┐")
-print("│ Counter:        │")
-print("│ Status:         │")
-print("└─────────────────┘")
+# Draw a fixed layout (ASCII only — font has no box-drawing characters)
+print("+-------------------+")
+print("| Counter:          |")
+print("| Status:           |")
+print("+-------------------+")
 
 for i in range(100):
     # Update counter on row 2, col 11 (1-indexed)
@@ -172,6 +172,7 @@ except Exception as e:
 
 ## Tips
 
+- **Characters**: the font (`dejavu14_ru`) contains ASCII and Cyrillic only. Unicode box-drawing characters, arrows, emoji, etc. will not render — use ASCII equivalents (`+`, `-`, `|`).
 - **Memory**: call `gc.collect()` before allocating large buffers. `gc.mem_free()` returns available heap bytes.
 - **Padding**: when overwriting with `\r`, pad shorter strings with spaces so remnants of longer text don't show: `f"{value:<20}"`.
 - **Exit early**: `return` at the top level of a script raises `SystemExit` in CPython but in MicroPython simply ends execution — the file picker will resume normally.
