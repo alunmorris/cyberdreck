@@ -1,5 +1,5 @@
 # getprog.py — download user programs from github.com/alunmorris/crack-programs
-import socket, ssl, json, gc, uos
+import socket, ssl, json, gc
 import wifi_mgr
 
 REPO_HOST = "raw.githubusercontent.com"
@@ -13,9 +13,9 @@ def _https_get(host, path):
     s.connect(addr)
     s = ssl.wrap_socket(s, server_hostname=host)
     req = (
-        f"GET {path} HTTP/1.1\r\n"
+        f"GET {path} HTTP/1.0\r\n"
         f"Host: {host}\r\n"
-        "Connection: close\r\n\r\n"
+        "\r\n"
     ).encode()
     s.write(req)
     chunks = []
@@ -47,14 +47,17 @@ def _ensure_wifi():
     return wifi_mgr.connect(c['ssid'], c['pass'])
 
 
-def run():
+def run(tft, kb):
+    import config, time
+    import fonts.dejavu14_ru as font14
+
     tft.fill(0x0000)
     tft.write(font14, "Connecting...", 2, 0, config.COL_AI, 0x0000)
 
     if not _ensure_wifi():
         tft.fill(0x0000)
         tft.write(font14, "No WiFi", 2, 0, config.COL_ERROR, 0x0000)
-        import time; time.sleep(2)
+        time.sleep(2)
         return
 
     tft.write(font14, "Loading manifest...", 2, config.LINE_H, config.COL_AI, 0x0000)
@@ -67,55 +70,55 @@ def run():
         tft.fill(0x0000)
         tft.write(font14, "Manifest error:", 2, 0, config.COL_ERROR, 0x0000)
         tft.write(font14, str(e)[:40], 2, config.LINE_H, 0xFFFF, 0x0000)
-        import time; time.sleep(3)
+        time.sleep(3)
         return
 
-    import hal_kb, time
-
-    sel = 0
-    n   = len(manifest) + 1   # entries + Cancel
+    sel    = 0
+    n      = len(manifest) + 1   # entries + Cancel
+    ENTRY_H = 2                  # rows per entry: filename + description
 
     def _draw(status=""):
         tft.fill(0x0000)
         tft.write(font14, "Download a program:", 2, 0, 0x03E0, 0x0000)
         for i, entry in enumerate(manifest):
-            row_y = (i + 1) * config.LINE_H
+            y0 = (1 + i * ENTRY_H) * config.LINE_H
+            y1 = y0 + config.LINE_H
             if i == sel:
-                tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
-                tft.write(font14, entry['file'][:38], 2, row_y, 0x0000, 0xFFFF)
+                tft.fill_rect(0, y0, config.SCREEN_W, config.LINE_H, 0xFFFF)
+                tft.write(font14, entry['file'][:38], 2, y0, 0x0000, 0xFFFF)
             else:
-                tft.write(font14, entry['file'][:38], 2, row_y, 0xFFFF, 0x0000)
-                tft.write(font14, entry['desc'][:38], 2, row_y + 1, 0x4208, 0x0000)
+                tft.write(font14, entry['file'][:38], 2, y0, 0xFFFF, 0x0000)
+            tft.write(font14, entry['desc'][:38], 2, y1, 0x4208, 0x0000)
         cancel_y = (config.MAX_VIS - 1) * config.LINE_H
         fg = 0x0000 if sel == len(manifest) else 0x07E0
         bg = 0xFFFF if sel == len(manifest) else 0x0000
         tft.fill_rect(0, cancel_y, config.SCREEN_W, config.LINE_H, bg)
         tft.write(font14, "Cancel", 2, cancel_y, fg, bg)
         if status:
-            sy = (len(manifest) + 2) * config.LINE_H
-            if sy < (config.MAX_VIS - 1) * config.LINE_H:
+            sy = (1 + len(manifest) * ENTRY_H) * config.LINE_H
+            if sy < cancel_y:
                 tft.write(font14, status[:40], 2, sy, config.COL_AI, 0x0000)
 
     _draw()
 
     while True:
         time.sleep_ms(20)
-        ev = hal_kb.poll()
+        ev = kb.poll()
         if ev is None:
             continue
         t, ch = ev
 
-        if t == hal_kb.INPUT_SCROLL_DOWN:
+        if t == kb.INPUT_SCROLL_DOWN:
             if sel > 0:
                 sel -= 1
                 _draw()
-        elif t == hal_kb.INPUT_SCROLL_UP:
+        elif t == kb.INPUT_SCROLL_UP:
             if sel < n - 1:
                 sel += 1
                 _draw()
-        elif t == hal_kb.INPUT_MODEL_MENU:
+        elif t == kb.INPUT_MODEL_MENU:
             return
-        elif t == hal_kb.INPUT_ENTER:
+        elif t == kb.INPUT_ENTER:
             if sel == len(manifest):
                 return
             entry = manifest[sel]
@@ -132,5 +135,3 @@ def run():
             except Exception as e:
                 _draw("Error: " + str(e)[:30])
                 time.sleep(3)
-
-run()

@@ -10,7 +10,7 @@ _MAX_CHARS  = 42
 _HIDDEN = frozenset({
     'main.py', 'config.py', 'secrets.py', 'hal_kb.py', 'display.py',
     'writer.py', 'history.py', 'ui.py', 'wifi_mgr.py', 'api.py',
-    'repl_term.py', 'boot.py', 'fonts',
+    'repl_term.py', 'boot.py', 'fonts', 'getprog.py',
 })
 
 
