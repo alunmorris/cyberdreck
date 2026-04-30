@@ -32,12 +32,18 @@ def _refresh():
     ui.draw_history()
     ui.draw_input_bar(''.join(_input_buf), _cursor, _rssi)
 
+def _model_label():
+    if _use_grok: return config.GROK_MODEL
+    if _use_groq: return config.GROQ_MODEL
+    return config.GEMINI_MODELS[_gemini_idx]
+
 def _new_conv():
     global _more_mode
     history.clear()
     _input_buf.clear()
     _cursor_set(0)
     _more_mode = False
+    history.add('ai', 'Model: ' + _model_label(), display_only=True)
     _refresh()
 
 # ── Model menu ─────────────────────────────────────────────────────────────────

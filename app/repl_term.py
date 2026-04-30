@@ -17,25 +17,25 @@ class _TFTTerminal:
     def __init__(self, tft, kb):
         self._tft    = tft
         self._kb     = kb
-        self._lines  = ['']
+        self._lines  = [['', config.COL_AI]]
         self._scroll = 0   # lines scrolled back from bottom
 
     def _view_start(self):
         bottom = max(0, len(self._lines) - config.MAX_VIS)
         return max(0, bottom - self._scroll)
 
-    def _draw_line(self, view_pos, text):
+    def _draw_line(self, view_pos, text, color):
         y = view_pos * config.LINE_H
         self._tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0x0000)
         if text:
-            self._tft.write(font14, text[:_MAX_CHARS], 2, y, 0xFFFF, 0x0000)
+            self._tft.write(font14, text[:_MAX_CHARS], 2, y, color, 0x0000)
 
     def _full_redraw(self):
         self._tft.fill(0x0000)
         start = self._view_start()
-        for i, line in enumerate(self._lines[start : start + config.MAX_VIS]):
+        for i, (line, col) in enumerate(self._lines[start : start + config.MAX_VIS]):
             if line:
-                self._tft.write(font14, line[:_MAX_CHARS], 2, i * config.LINE_H, 0xFFFF, 0x0000)
+                self._tft.write(font14, line[:_MAX_CHARS], 2, i * config.LINE_H, col, 0x0000)
 
     def scroll_up(self, n=1):
         max_scroll = max(0, len(self._lines) - config.MAX_VIS)
@@ -46,13 +46,14 @@ class _TFTTerminal:
         self._scroll = max(0, self._scroll - n)
         self._full_redraw()
 
-    def write(self, s):
+    def write(self, s, color=config.COL_AI):
         if isinstance(s, (bytes, bytearray, memoryview)):
             try:
                 s = bytes(s).decode('utf-8', 'replace')
             except Exception:
                 return 0
 
+        self._lines[-1][1] = color
         old_n       = len(self._lines)
         old_bottom  = max(0, old_n - config.MAX_VIS)
         first_dirty = old_n - 1
@@ -69,21 +70,21 @@ class _TFTTerminal:
                 i += 1
                 continue
             elif ch == '\n':
-                self._lines.append('')
+                self._lines.append(['', color])
                 if len(self._lines) > _BUF_LINES:
                     self._lines.pop(0)
             elif ch == '\r':
                 if i + 1 < len(s) and s[i + 1] == '\n':
                     pass
                 else:
-                    self._lines[-1] = ''
+                    self._lines[-1][0] = ''
             elif ch == '\x08':
-                if self._lines[-1]:
-                    self._lines[-1] = self._lines[-1][:-1]
+                if self._lines[-1][0]:
+                    self._lines[-1][0] = self._lines[-1][0][:-1]
             elif ord(ch) >= 0x20:
-                self._lines[-1] += ch
-                if len(self._lines[-1]) >= _MAX_CHARS:
-                    self._lines.append('')
+                self._lines[-1][0] += ch
+                if len(self._lines[-1][0]) >= _MAX_CHARS:
+                    self._lines.append(['', color])
                     if len(self._lines) > _BUF_LINES:
                         self._lines.pop(0)
             i += 1
@@ -100,7 +101,8 @@ class _TFTTerminal:
             fv = max(0, first_dirty - new_bottom)
             lv = min(config.MAX_VIS, new_n - new_bottom)
             for j in range(fv, lv):
-                self._draw_line(j, self._lines[new_bottom + j])
+                line, col = self._lines[new_bottom + j]
+                self._draw_line(j, line, col)
 
         return len(s)
 
@@ -112,12 +114,12 @@ def run(tft, kb):
     tft.fill(0x0000)
     term = _TFTTerminal(tft, kb)
 
-    def out(s):
-        term.write(s)
+    def out(s, color=config.COL_AI):
+        term.write(s, color)
 
     out('MicroPython REPL. ctrl-D to exit\n')
-    out("run('xxx.py') to run a python file\n")
-    out('ls() to see user files\n')
+    out("run('xxx.py') to run a python file\n", 0x07E0)
+    out('ls() to see user files\n', 0x07E0)
 
     import uos, gc, machine, network
 
@@ -163,7 +165,7 @@ def run(tft, kb):
     def _draw_input():
         p    = '... ' if cont else '>>> '
         text = p + cur
-        term._lines[-1] = text
+        term._lines[-1] = [text, config.COL_USER]
         n  = len(term._lines)
         vs = term._view_start()
         vp = (n - 1) - vs
@@ -171,9 +173,9 @@ def run(tft, kb):
             y = vp * config.LINE_H
             tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0x0000)
             if text:
-                tft.write(font14, text[:_MAX_CHARS], 2, y, 0xFFFF, 0x0000)
+                tft.write(font14, text[:_MAX_CHARS], 2, y, config.COL_USER, 0x0000)
             cx = 2 + tft.write_len(font14, (p + cur[:cur_pos])[:_MAX_CHARS])
-            tft.fill_rect(cx, y + 2, 1, config.LINE_H - 4, 0xFFFF)
+            tft.fill_rect(cx, y + 2, 1, config.LINE_H - 4, config.COL_USER)
 
     _draw_input()
 
@@ -255,13 +257,12 @@ def run(tft, kb):
                         try:
                             exec(src, ns)
                         except Exception as e:
-                            out(type(e).__name__ + ': ' + str(e) + '\n')
+                            out(type(e).__name__ + ': ' + str(e) + '\n', config.COL_ERROR)
                     except Exception as e:
-                        out(type(e).__name__ + ': ' + str(e) + '\n')
+                        out(type(e).__name__ + ': ' + str(e) + '\n', config.COL_ERROR)
                 _draw_input()
 
         except Exception as e:
-            out('\nerr: ' + str(e) + '\n')
+            out('\nerr: ' + str(e) + '\n', config.COL_ERROR)
             cur = ''; cur_pos = 0; buf = []; cont = False
             _draw_input()
-

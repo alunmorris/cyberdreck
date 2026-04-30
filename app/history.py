@@ -17,6 +17,12 @@ def clear():
 def add(role, text, display_only=False):
     """Add a message. role = 'user', 'ai', or 'error'."""
     global _messages, _total_bytes
+    text = (text
+        .replace('‘', "'").replace('’', "'")
+        .replace('“', '"').replace('”', '"')
+        .replace('–', '-').replace('—', '-')
+        .replace('…', '...').replace(' ', ' ')
+    )
     safe = []
     for ch in text:
         o = ord(ch)
