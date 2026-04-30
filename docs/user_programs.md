@@ -46,7 +46,7 @@ import ubinascii
 
 ## print()
 
-`print()` writes to the TFT terminal, not UART. All standard keyword arguments work:
+`print()` writes to the TFT terminal using the proportional `font14`. All standard keyword arguments work:
 
 ```python
 print("hello")                  # yellow text, newline at end
@@ -71,7 +71,8 @@ print()                                      # move to next line when done
 
 ## ANSI escape sequences
 
-The TFT terminal understands a useful subset of VT100 escapes. All use `print(..., end="")` so no extra newline is added.
+Both `print()` and the monospaced terminal understand a subset of VT100 escapes.
+Use `end=""` to suppress the automatic newline.
 
 ### Cursor movement
 
@@ -90,7 +91,8 @@ The TFT terminal understands a useful subset of VT100 escapes. All use `print(..
 
 ### Important: `\n` advances the cursor
 
-In the terminal, `\n` moves the write position **down one line** (or appends a new line if already at the bottom). This means the cursor position after a `print()` call depends on whether the string contains `\n`.
+`\n` moves the write position **down one line** (appending a new line if at the bottom).
+The cursor position after `print()` depends on whether the string contains `\n`.
 
 ```python
 print("Line A")             # writes "Line A", then \n moves cursor down
@@ -99,29 +101,55 @@ print("\x1b[2K", end="")   # erase "Line A"
 print("Line A updated", end="")  # write replacement, no \n — stay here
 ```
 
-If you include an explicit `\n` in the string **and** let `print` add one (`end="\n"`), the cursor moves twice. Use `end=""` with explicit `\n` in the string when you need precise control.
+If you include an explicit `\n` in the string **and** let `print` add one (`end="\n"`), the cursor moves twice. Use `end=""` with explicit `\n` when you need precise control.
 
-### Multi-line status display example
+---
 
-The font is proportional so mid-line column positioning looks misaligned. Overwrite
-complete lines instead — no alignment issues:
+## Monospaced terminal
+
+`print()` uses proportional `font14`, so column positions don't align visually.
+For aligned columns and box drawing, create a `_TFTTerminal` with `mono13`:
+
+```python
+tft.fill(0x0000)
+term = _TFTTerminal(tft, None, font=mono13)
+
+def mprint(*args, **kwargs):
+    sep = kwargs.get('sep', ' ')
+    end = kwargs.get('end', '\n')
+    term.write(sep.join(str(a) for a in args) + end)
+```
+
+Pass `None` for `kb` — the terminal class does not poll the keyboard itself.
+
+All ANSI escapes and `\r` overwrite work identically through `mprint`.
+
+### Box drawing example
 
 ```python
 import time
 
-print("Counter:  0")
-print("Status:   starting")
+tft.fill(0x0000)
+term = _TFTTerminal(tft, None, font=mono13)
+
+def mprint(*args, **kwargs):
+    sep = kwargs.get('sep', ' ')
+    end = kwargs.get('end', '\n')
+    term.write(sep.join(str(a) for a in args) + end)
+
+mprint("+-------------------+")
+mprint("| Counter:          |")
+mprint("| Status:           |")
+mprint("+-------------------+", end="")   # no \n — cursor stays on this line
 
 for i in range(100):
     done = (i == 99)
-    print(f"\x1b[2A\x1b[2KCounter:  {i}", end="\n")
-    print(f"\x1b[2KStatus:   {'done   ' if done else 'running'}", end="")
+    # cursor is on bottom line; up 2 reaches counter line
+    mprint(f"\x1b[2A\x1b[2K| Counter: {i:<9}|", end="\n")
+    mprint(f"\x1b[2K| Status:  {'done   ' if done else 'running':<9}|", end="\n")
+    mprint("\x1b[2K+-------------------+", end="")
     time.sleep_ms(100)
-print()
 ```
-
-`\x1b[2A` moves up 2 lines, `\x1b[2K` erases the line, then the new text is written. Each
-iteration overwrites both lines completely so width differences never accumulate.
 
 ---
 
@@ -142,13 +170,14 @@ The terminal occupies the full screen (14 rows of 42 characters). The bottom row
 
 ## Direct display access
 
-You can bypass `print` and draw directly using `tft`:
+Bypass `print` and draw directly using `tft`:
 
 ```python
 tft.fill(0x0000)                                    # clear screen (black)
 tft.fill_rect(x, y, w, h, colour)                  # filled rectangle
-tft.write(font14, "text", x, y, fg, bg)            # text at pixel position
-tft.write_len(font14, "text")                       # pixel width of text
+tft.write(font14, "text", x, y, fg, bg)            # proportional text
+tft.write(mono13, "text", x, y, fg, bg)            # monospaced text
+tft.write_len(font14, "text")                       # pixel width of string
 
 # Common RGB565 colours (from config)
 config.COL_AI       # 0xF760  yellow
@@ -156,44 +185,11 @@ config.COL_USER     # 0x07FF  cyan
 config.COL_ERROR    # 0xF800  red
 ```
 
-Mix `tft` drawing with `print` freely — they share the same display.
-
-### Monospaced terminal
-
-`print()` uses the proportional `font14` by default. For aligned columns and box
-drawing, create a `_TFTTerminal` with `mono13` and use it directly:
-
-```python
-tft.fill(0x0000)
-term = _TFTTerminal(tft, None, font=mono13)
-
-def mprint(*args, **kwargs):
-    sep = kwargs.get('sep', ' ')
-    end = kwargs.get('end', '\n')
-    term.write(sep.join(str(a) for a in args) + end)
-
-mprint("+-------------------+")
-mprint("| Counter:          |")
-mprint("| Status:           |")
-mprint("+-------------------+")
-
-import time
-for i in range(100):
-    done = (i == 99)
-    mprint(f"\x1b[3A\x1b[2K| Counter: {i:<9}|", end="\n")
-    mprint(f"\x1b[2K| Status:  {'done   ' if done else 'running':<9}|", end="\n")
-    mprint("\x1b[2K+-------------------+", end="")
-    time.sleep_ms(100)
-```
-
-`_TFTTerminal(tft, None, font=mono13)` — pass `None` for `kb` since the terminal
-class does not poll the keyboard itself.
-
 ---
 
 ## Error handling
 
-If your program raises an unhandled exception the terminal clears, the exception type and message are shown in red, and **"Enter to exit"** appears. Press **Enter** to return to the file picker.
+If your program raises an unhandled exception the exception type and message are shown in red, and **"Enter to exit"** appears. Press **Enter** to return to the file picker.
 
 To catch errors yourself:
 
@@ -201,15 +197,15 @@ To catch errors yourself:
 try:
     risky_operation()
 except Exception as e:
-    print(f"Error: {e}", end="\n")
+    print(f"Error: {e}")
 ```
 
 ---
 
 ## Tips
 
-- **Characters**: the font (`dejavu14_ru`) contains ASCII and Cyrillic only. Unicode box-drawing characters, arrows, emoji, etc. will not render — use ASCII equivalents (`+`, `-`, `|`).
-- **Memory**: call `gc.collect()` before allocating large buffers. `gc.mem_free()` returns available heap bytes.
+- **Characters**: `font14` contains ASCII and Cyrillic. `mono13` contains ASCII only (0x20–0x7e). Unicode box-drawing characters, arrows, and emoji will not render in either font.
 - **Padding**: when overwriting with `\r`, pad shorter strings with spaces so remnants of longer text don't show: `f"{value:<20}"`.
-- **Exit early**: `return` at the top level of a script raises `SystemExit` in CPython but in MicroPython simply ends execution — the file picker will resume normally.
-- **Avoid `input()`**: there is no stdin; use the keyboard via `hal_kb` if you need interactive input (import it and call `hal_kb.poll()`).
+- **Memory**: call `gc.collect()` before allocating large buffers. `gc.mem_free()` returns available heap bytes.
+- **Exit cleanly**: at the top level of a MicroPython script, execution simply ends — the file picker resumes normally.
+- **Avoid `input()`**: there is no stdin; use the keyboard via `hal_kb` if you need interactive input (`import hal_kb; hal_kb.poll()`).
