@@ -95,6 +95,7 @@ static void parse_hid_report(const uint8_t* data, size_t len) {
         int type = EV_NONE; char ch = 0;
         if      (ctrl && code == 0x11) type = EV_NEW_CONV;
         else if (ctrl && code == 0x10) type = EV_MORE;
+        else if (ctrl && code == 0x07) { type = EV_CHAR; ch = '\x04'; }  // Ctrl-D
         // ↑/PgUp = scroll to newer (down in history) — matches SLUG hal_s2.cpp convention
         else if (code == 0x52)         type = EV_SCROLL_DOWN;
         else if (code == 0x51)         type = EV_SCROLL_UP;

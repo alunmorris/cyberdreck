@@ -66,7 +66,13 @@ def show_model_menu():
             if ch == 'm':
                 import repl_term
                 repl_term.run(_tft, hal_kb)
-                return False   # back to model menu if run() ever exits
+                # REPL exited (Ctrl-D) — redraw menu and loop
+                _tft.fill(bg)
+                _tft.write(font14, "Select model:", 2, 0, 0x03E0, bg)
+                for idx, (key, label, _, __, ___) in enumerate(items):
+                    _tft.write(font14, f"{key} {label[:36]}", 2, (idx + 1) * config.LINE_H, 0xFFFF, bg)
+                _tft.write(font14, "m MicroPython REPL", 2, (len(items) + 2) * config.LINE_H, 0xFFFF, bg)
+                continue
             if ch.isdigit():
                 for key, label, grok, groq, gidx in items:
                     if ch == key:

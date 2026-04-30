@@ -6,6 +6,12 @@ import fonts.dejavu14_ru as font14
 _BUF_LINES = 200
 _MAX_CHARS  = 42
 
+_HIDDEN = frozenset({
+    'main.py', 'config.py', 'secrets.py', 'hal_kb.py', 'display.py',
+    'writer.py', 'history.py', 'ui.py', 'wifi_mgr.py', 'api.py',
+    'repl_term.py', 'boot.py', 'fonts',
+})
+
 
 class _TFTTerminal:
     def __init__(self, tft, kb):
@@ -109,8 +115,9 @@ def run(tft, kb):
     def out(s):
         term.write(s)
 
-    out('MicroPython REPL\n')
-    out('Reset device to exit\n')
+    out('MicroPython REPL. ctrl-D to exit\n')
+    out("run('xxx.py') to run a python file\n")
+    out('ls() to see user files\n')
 
     import uos, gc, machine, network
 
@@ -124,14 +131,28 @@ def run(tft, kb):
             path = '/' + path
         exec(open(path).read(), ns)
 
+    def _ls(path='/'):
+        for name in sorted(uos.listdir(path)):
+            if name not in _HIDDEN:
+                out(name + '\n')
+
+    class _SafeOS:
+        def __getattr__(self, name):
+            return getattr(uos, name)
+        def listdir(self, path='/'):
+            return [f for f in uos.listdir(path) if f not in _HIDDEN]
+
+    _safe_os = _SafeOS()
+
     ns = dict(globals())
     ns.update({
-        'uos': uos, 'os': uos,
+        'uos': _safe_os, 'os': _safe_os,
         'gc': gc,
         'machine': machine,
         'network': network,
         'print': _print,
         'run': _run,
+        'ls': _ls,
     })
 
     cur     = ''
@@ -165,6 +186,8 @@ def run(tft, kb):
 
         try:
             if t == kb.INPUT_CHAR:
+                if ch == '\x04':   # Ctrl-D — exit REPL
+                    return
                 cur = cur[:cur_pos] + ch + cur[cur_pos:]
                 cur_pos += 1
                 _draw_input()
@@ -189,6 +212,9 @@ def run(tft, kb):
                 if cur_pos < len(cur):
                     cur_pos += 1
                     _draw_input()
+
+            elif t == kb.INPUT_MODEL_MENU:
+                return
 
             elif t == kb.INPUT_SCROLL_UP:
                 term.scroll_down(1)
