@@ -101,22 +101,25 @@ If you include an explicit `\n` in the string **and** let `print` add one (`end=
 
 ### Multi-line status display example
 
+The font is proportional so mid-line column positioning looks misaligned. Overwrite
+complete lines instead — no alignment issues:
+
 ```python
 import time
 
-# Draw a fixed layout (ASCII only — font has no box-drawing characters)
-print("+-------------------+")
-print("| Counter:          |")
-print("| Status:           |")
-print("+-------------------+")
+print("Counter:  0")
+print("Status:   starting")
 
 for i in range(100):
-    # Update counter on row 2, col 11 (1-indexed)
-    print(f"\x1b[2;11H{i:5}", end="")
-    # Update status on row 3, col 11
-    print(f"\x1b[3;11H{'running' if i < 99 else 'done   '}", end="")
+    done = (i == 99)
+    print(f"\x1b[2A\x1b[2KCounter:  {i}", end="\n")
+    print(f"\x1b[2KStatus:   {'done   ' if done else 'running'}", end="")
     time.sleep_ms(100)
+print()
 ```
+
+`\x1b[2A` moves up 2 lines, `\x1b[2K` erases the line, then the new text is written. Each
+iteration overwrites both lines completely so width differences never accumulate.
 
 ---
 
