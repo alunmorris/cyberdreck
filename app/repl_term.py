@@ -18,7 +18,8 @@ class _TFTTerminal:
         self._tft    = tft
         self._kb     = kb
         self._lines  = [['', config.COL_AI]]
-        self._scroll = 0   # lines scrolled back from bottom
+        self._scroll = 0
+        self._col    = 0  # write column in current line (for \r overwrite)
 
     def _view_start(self):
         bottom = max(0, len(self._lines) - config.MAX_VIS)
@@ -69,24 +70,29 @@ class _TFTTerminal:
                         i += 1
                 i += 1
                 continue
-            elif ch == '\n':
+            if ch == '\n':
                 self._lines.append(['', color])
                 if len(self._lines) > _BUF_LINES:
                     self._lines.pop(0)
+                self._col = 0
             elif ch == '\r':
-                if i + 1 < len(s) and s[i + 1] == '\n':
-                    pass
-                else:
-                    self._lines[-1][0] = ''
+                if not (i + 1 < len(s) and s[i + 1] == '\n'):
+                    self._col = 0   # move to start; don't clear existing text
             elif ch == '\x08':
-                if self._lines[-1][0]:
-                    self._lines[-1][0] = self._lines[-1][0][:-1]
+                if self._col > 0:
+                    self._col -= 1
             elif ord(ch) >= 0x20:
-                self._lines[-1][0] += ch
-                if len(self._lines[-1][0]) >= _MAX_CHARS:
+                text = self._lines[-1][0]
+                if self._col < len(text):
+                    self._lines[-1][0] = text[:self._col] + ch + text[self._col + 1:]
+                else:
+                    self._lines[-1][0] = text + ch
+                self._col += 1
+                if self._col >= _MAX_CHARS:
                     self._lines.append(['', color])
                     if len(self._lines) > _BUF_LINES:
                         self._lines.pop(0)
+                    self._col = 0
             i += 1
 
         if self._scroll > 0:
@@ -166,6 +172,7 @@ def run(tft, kb):
         p    = '... ' if cont else '>>> '
         text = p + cur
         term._lines[-1] = [text, config.COL_USER]
+        term._col = len(text)
         n  = len(term._lines)
         vs = term._view_start()
         vp = (n - 1) - vs
@@ -266,3 +273,111 @@ def run(tft, kb):
             out('\nerr: ' + str(e) + '\n', config.COL_ERROR)
             cur = ''; cur_pos = 0; buf = []; cont = False
             _draw_input()
+
+
+def show_file_picker(tft, kb):
+    import uos, time as _time
+
+    _FILE_ROWS = config.MAX_VIS - 2   # rows between title and Menu
+
+    def _get_files():
+        try:
+            return sorted(f for f in uos.listdir('/') if f.endswith('.py') and f not in _HIDDEN)
+        except Exception:
+            return []
+
+    def _draw(files, sel, offset):
+        tft.fill(0x0000)
+        tft.write(font14, 'Run a program:', 2, 0, 0x03E0, 0x0000)
+        for i in range(_FILE_ROWS):
+            fi    = offset + i
+            row_y = (i + 1) * config.LINE_H
+            if fi < len(files):
+                fg, bg = (0x0000, 0xFFFF) if fi == sel else (0xFFFF, 0x0000)
+                tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, bg)
+                tft.write(font14, files[fi][:40], 2, row_y, fg, bg)
+            else:
+                tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, 0x0000)
+        menu_y = (config.MAX_VIS - 1) * config.LINE_H
+        if sel == len(files):
+            tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
+            tft.write(font14, 'Menu', 2, menu_y, 0x0000, 0xFFFF)
+        else:
+            tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0x0000)
+            tft.write(font14, 'Menu', 2, menu_y, 0x07E0, 0x0000)
+
+    sel    = 0
+    offset = 0
+
+    while True:
+        files   = _get_files()
+        n_items = len(files) + 1
+        sel     = min(sel, n_items - 1)
+        offset  = max(0, min(offset, max(0, len(files) - _FILE_ROWS)))
+        _draw(files, sel, offset)
+
+        while True:
+            _time.sleep_ms(20)
+            ev = kb.poll()
+            if ev is None:
+                continue
+            t, ch = ev
+
+            if t == kb.INPUT_SCROLL_DOWN:
+                if sel > 0:
+                    sel -= 1
+                    if sel < len(files):
+                        offset = min(offset, sel)
+                    _draw(files, sel, offset)
+            elif t == kb.INPUT_SCROLL_UP:
+                if sel < n_items - 1:
+                    sel += 1
+                    if sel < len(files):
+                        offset = max(offset, sel - _FILE_ROWS + 1)
+                    _draw(files, sel, offset)
+            elif t == kb.INPUT_ENTER:
+                if sel == len(files):
+                    return
+                path = '/' + files[sel]
+                try:
+                    import gc, machine, network
+                    tft.fill(0x0000)
+                    term = _TFTTerminal(tft, kb)
+                    def _print(*args, **kwargs):
+                        sep = kwargs.get('sep', ' ')
+                        end = kwargs.get('end', '\n')
+                        term.write(sep.join(str(a) for a in args) + end)
+                    ns = dict(globals())
+                    ns.update({'__name__': '__main__', 'gc': gc,
+                               'machine': machine, 'network': network,
+                               'print': _print, 'tft': tft, 'font14': font14})
+                    exec(open(path).read(), ns)
+                    # Program finished — leave screen as-is, prompt to continue
+                    tft.fill_rect(0, (config.MAX_VIS - 1) * config.LINE_H,
+                                  config.SCREEN_W, config.LINE_H, 0x0000)
+                    tft.write(font14, 'Enter to exit', 2,
+                              (config.MAX_VIS - 1) * config.LINE_H, 0x07E0, 0x0000)
+                    while True:
+                        _time.sleep_ms(20)
+                        ev2 = kb.poll()
+                        if ev2 is not None and ev2[0] == kb.INPUT_ENTER:
+                            break
+                except Exception as e:
+                    tft.fill(0x0000)
+                    tft.write(font14, type(e).__name__ + ':', 2, 0, 0xF800, 0x0000)
+                    msg = str(e)
+                    for row in range(min(4, config.MAX_VIS - 2)):
+                        chunk = msg[row * 38 : (row + 1) * 38]
+                        if not chunk:
+                            break
+                        tft.write(font14, chunk, 2, (row + 1) * config.LINE_H, 0xFFFF, 0x0000)
+                    tft.write(font14, 'Enter to exit', 2,
+                              (config.MAX_VIS - 1) * config.LINE_H, 0x07E0, 0x0000)
+                    while True:
+                        _time.sleep_ms(20)
+                        ev2 = kb.poll()
+                        if ev2 is not None and ev2[0] == kb.INPUT_ENTER:
+                            break
+                break   # re-fetch file list and redraw
+            elif t == kb.INPUT_MODEL_MENU:
+                return

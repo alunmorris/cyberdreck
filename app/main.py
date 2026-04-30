@@ -50,17 +50,23 @@ def _new_conv():
 def show_model_menu():
     global _use_grok, _use_groq, _gemini_idx
     bg = 0x0000
-    _tft.fill(bg)
     items = []
     for i, m in enumerate(config.GEMINI_MODELS, 1):
         items.append((str(i), m, False, False, i - 1))
     n = len(config.GEMINI_MODELS)
     items.append((str(n + 1), config.GROK_MODEL,  True,  False, 0))
     items.append((str(n + 2), config.GROQ_MODEL,  False, True,  0))
-    _tft.write(font14, "Select model:", 2, 0, 0x03E0, bg)
-    for idx, (key, label, _, __, ___) in enumerate(items):
-        _tft.write(font14, f"{key} {label[:36]}", 2, (idx + 1) * config.LINE_H, 0xFFFF, bg)
-    _tft.write(font14, "m MicroPython REPL", 2, (len(items) + 2) * config.LINE_H, 0xFFFF, bg)
+
+    def _draw_menu():
+        _tft.fill(bg)
+        _tft.write(font14, "Select model:", 2, 0, 0x03E0, bg)
+        for idx, (key, label, _, __, ___) in enumerate(items):
+            _tft.write(font14, f"{key} {label[:36]}", 2, (idx + 1) * config.LINE_H, 0xFFFF, bg)
+        base = len(items) + 2
+        _tft.write(font14, "m MicroPython REPL", 2, base * config.LINE_H, 0xFFFF, bg)
+        _tft.write(font14, "r Run a program",    2, (base + 1) * config.LINE_H, 0xFFFF, bg)
+
+    _draw_menu()
 
     while True:
         ev = hal_kb.poll()
@@ -72,12 +78,12 @@ def show_model_menu():
             if ch == 'm':
                 import repl_term
                 repl_term.run(_tft, hal_kb)
-                # REPL exited (Ctrl-D) — redraw menu and loop
-                _tft.fill(bg)
-                _tft.write(font14, "Select model:", 2, 0, 0x03E0, bg)
-                for idx, (key, label, _, __, ___) in enumerate(items):
-                    _tft.write(font14, f"{key} {label[:36]}", 2, (idx + 1) * config.LINE_H, 0xFFFF, bg)
-                _tft.write(font14, "m MicroPython REPL", 2, (len(items) + 2) * config.LINE_H, 0xFFFF, bg)
+                _draw_menu()
+                continue
+            if ch == 'r':
+                import repl_term
+                repl_term.show_file_picker(_tft, hal_kb)
+                _draw_menu()
                 continue
             if ch.isdigit():
                 for key, label, grok, groq, gidx in items:
