@@ -148,8 +148,8 @@ def enter_password(tft, kb, ssid):
     tft.write(font14, "Password for:", 2, 0, config.COL_AI, 0x0000)
     tft.write(font14, ssid[:36], 2, config.LINE_H, 0xFFFF, 0x0000)
     buf = []; cursor = 0
+    ui.draw_input_bar(''.join(buf), cursor, show_wifi=False)
     while True:
-        ui.draw_input_bar(''.join(buf), cursor)
         time.sleep_ms(20)
         ev = kb.poll()
         if ev is None:
@@ -167,6 +167,9 @@ def enter_password(tft, kb, ssid):
             cursor -= 1
         elif t == kb.INPUT_CURSOR_RIGHT and cursor < len(buf):
             cursor += 1
+        else:
+            continue
+        ui.draw_input_bar(''.join(buf), cursor, show_wifi=False)
 
 def select_ap(tft, kb, aps=None):
     """Full flow: scan → pick → password → connect. Returns True if connected."""

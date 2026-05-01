@@ -62,7 +62,7 @@ def _draw_wifi_bars(rssi, bg):
         by = y0 + h - bh
         _tft.fill_rect(bx, by, _BAR_W, bh, col if i < levels else dim)
 
-def draw_input_bar(input_buf, cursor_pos, rssi=None):
+def draw_input_bar(input_buf, cursor_pos, rssi=None, show_wifi=True):
     bg         = _bg()
     fg         = 0xFFFF
     prompt_col = 0xFFFF if rssi is not None else config.COL_ERROR
@@ -85,4 +85,5 @@ def draw_input_bar(input_buf, cursor_pos, rssi=None):
     cur_x = prompt_w + _measure(input_buf[start:cursor_pos])
     _tft.fill_rect(cur_x, config.INPUT_Y + 2, 1, config.LINE_H - 4, fg)
 
-    _draw_wifi_bars(rssi, bg)
+    if show_wifi:
+        _draw_wifi_bars(rssi, bg)
