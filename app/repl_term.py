@@ -415,12 +415,15 @@ def show_file_manager(tft, kb):
                     tft.write(font14, label[:38], 2, row_y, fg, 0x0000)
             else:
                 tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, 0x0000)
-        hint_y = (config.MAX_VIS - 1) * config.LINE_H
-        tft.fill_rect(0, hint_y, config.SCREEN_W, config.LINE_H, 0x0000)
+        menu_y = (config.MAX_VIS - 1) * config.LINE_H
+        tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0x0000)
         if hint:
-            tft.write(font14, hint[:38], 2, hint_y, config.COL_AI, 0x0000)
+            tft.write(font14, hint[:38], 2, menu_y, config.COL_AI, 0x0000)
+        elif sel == len(entries):
+            tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
+            tft.write(font14, 'Menu', 2, menu_y, 0x0000, 0xFFFF)
         else:
-            tft.write(font14, 'Del=del  r=rename  Menu=exit', 2, hint_y, 0x4208, 0x0000)
+            tft.write(font14, 'e=run  Del=del  r=ren  Menu', 2, menu_y, 0x4208, 0x0000)
 
     def _rename_prompt(name):
         import ui
@@ -456,9 +459,9 @@ def show_file_manager(tft, kb):
 
     while True:
         entries = _get_entries(path)
-        n = len(entries)
-        sel = min(sel, max(0, n - 1))
-        offset = max(0, min(offset, max(0, n - _FILE_ROWS)))
+        n = len(entries) + 1   # +1 for Menu
+        sel = min(sel, n - 1)
+        offset = max(0, min(offset, max(0, len(entries) - _FILE_ROWS)))
         _draw(entries, sel, offset, path)
 
         while True:
@@ -475,12 +478,15 @@ def show_file_manager(tft, kb):
             elif t == kb.INPUT_SCROLL_UP:
                 if sel < n - 1:
                     sel += 1
-                    offset = max(offset, sel - _FILE_ROWS + 1)
+                    if sel < len(entries):
+                        offset = max(offset, sel - _FILE_ROWS + 1)
                     _draw(entries, sel, offset, path)
             elif t == kb.INPUT_MODEL_MENU:
                 return
 
             elif t == kb.INPUT_ENTER:
+                if sel == len(entries):   # Menu selected
+                    return
                 if not entries: break
                 name, is_dir = entries[sel]
                 if is_dir:
@@ -498,12 +504,23 @@ def show_file_manager(tft, kb):
                     _time.sleep_ms(1500)
                 break
 
+            elif t == kb.INPUT_CHAR and ch == 'e':
+                if sel == len(entries) or not entries: continue
+                name, is_dir = entries[sel]
+                if is_dir or name == '..': continue
+                if name.endswith('.py'):
+                    _run_file(tft, kb, _join(path, name))
+                else:
+                    _draw(entries, sel, offset, path, hint=name + ': not a .py file')
+                    _time.sleep_ms(1500)
+                break
+
             elif t == kb.INPUT_DELETE:
                 if not entries: continue
                 name, is_dir = entries[sel]
                 if name == '..': continue
                 _draw(entries, sel, offset, path,
-                      hint='Delete ' + name[:20] + '? Enter=Yes Menu=No')
+                      hint='Delete? Enter=Yes  Menu=No')
                 confirmed = False
                 while True:
                     _time.sleep_ms(20)
