@@ -423,7 +423,7 @@ def show_file_manager(tft, kb):
             tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
             tft.write(font14, 'Menu', 2, menu_y, 0x0000, 0xFFFF)
         else:
-            tft.write(font14, 'e=run  Del=del  r=ren  Menu', 2, menu_y, 0x4208, 0x0000)
+            tft.write(font14, 'e=execute DEL=delete r=rename m=menu', 2, menu_y, 0x4208, 0x0000)
 
     def _rename_prompt(name):
         import ui
@@ -482,6 +482,8 @@ def show_file_manager(tft, kb):
                         offset = max(offset, sel - _FILE_ROWS + 1)
                     _draw(entries, sel, offset, path)
             elif t == kb.INPUT_MODEL_MENU:
+                return
+            elif t == kb.INPUT_CHAR and ch == 'm':
                 return
 
             elif t == kb.INPUT_ENTER:
