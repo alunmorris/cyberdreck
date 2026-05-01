@@ -376,7 +376,8 @@ def _run_file(tft, kb, path):
 def show_file_manager(tft, kb):
     import uos, time as _time
 
-    _FILE_ROWS = config.MAX_VIS - 2
+    _FILE_ROWS = config.MAX_VIS - 3
+    _COL_W = config.SCREEN_W // 2   # 160px per column
 
     def _get_entries(path):
         entries = []
@@ -397,40 +398,49 @@ def show_file_manager(tft, kb):
     def _join(path, name):
         return ('/' + name) if path == '/' else (path + '/' + name)
 
+    def _cell_label(name, is_dir):
+        if is_dir:
+            return (name[:17] + '/') if len(name) > 17 else (name + '/')
+        return name[:18]
+
     def _draw(entries, sel, offset, path, hint=''):
         tft.fill(0x0000)
         hdr = path if len(path) <= 30 else '...' + path[-27:]
         tft.write(font14, 'Files: ' + hdr, 2, 0, 0x03E0, 0x0000)
-        for i in range(_FILE_ROWS):
-            fi = offset + i
-            row_y = (i + 1) * config.LINE_H
-            if fi < len(entries):
-                name, is_dir = entries[fi]
-                label = (name + '/') if (is_dir and name != '..') else name
-                if fi == sel:
-                    tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
-                    tft.write(font14, label[:38], 2, row_y, 0x0000, 0xFFFF)
-                else:
-                    fg = 0xFFE0 if is_dir else (0x07FF if name.endswith('.py') else 0xFFFF)
-                    tft.write(font14, label[:38], 2, row_y, fg, 0x0000)
-            else:
-                tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, 0x0000)
-        menu_y = (config.MAX_VIS - 1) * config.LINE_H
-        tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0x0000)
+        offset_row = offset // 2
+        for row in range(_FILE_ROWS):
+            row_y = (row + 1) * config.LINE_H
+            for col in range(2):
+                fi = (offset_row + row) * 2 + col
+                cx = 2 + col * _COL_W
+                if fi < len(entries):
+                    name, is_dir = entries[fi]
+                    label = _cell_label(name, is_dir)
+                    if fi == sel:
+                        tft.fill_rect(cx - 2, row_y, _COL_W, config.LINE_H, 0xFFFF)
+                        tft.write(font14, label, cx, row_y, 0x0000, 0xFFFF)
+                    else:
+                        fg = 0x07E0 if is_dir else (0x07FF if name.endswith('.py') else 0xFFFF)
+                        tft.write(font14, label, cx, row_y, fg, 0x0000)
+        hint1_y = (config.MAX_VIS - 2) * config.LINE_H
+        menu_y  = (config.MAX_VIS - 1) * config.LINE_H
+        tft.fill_rect(0, hint1_y, config.SCREEN_W, config.LINE_H * 2, 0x0000)
         if hint:
-            tft.write(font14, hint[:38], 2, menu_y, config.COL_AI, 0x0000)
+            tft.write(font14, hint[:38], 2, hint1_y, config.COL_AI, 0x0000)
         elif sel == len(entries):
             tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
             tft.write(font14, 'Menu', 2, menu_y, 0x0000, 0xFFFF)
         else:
-            tft.write(font14, 'e=execute DEL=delete r=rename m=menu', 2, menu_y, 0x4208, 0x0000)
+            tft.write(font14, 'e=execute f=new folder r=rename', 2, hint1_y, 0xC618, 0x0000)
+            tft.write(font14, 'DEL=delete  m=menu', 2, menu_y, 0xC618, 0x0000)
 
-    def _rename_prompt(name):
+    def _text_prompt(title, initial=''):
         import ui
         tft.fill(0x0000)
-        tft.write(font14, 'Rename to:', 2, 0, config.COL_AI, 0x0000)
-        tft.write(font14, name[:36], 2, config.LINE_H, 0xFFFF, 0x0000)
-        buf = list(name); cursor = len(buf)
+        tft.write(font14, title, 2, 0, config.COL_AI, 0x0000)
+        if initial:
+            tft.write(font14, initial[:36], 2, config.LINE_H, 0xFFFF, 0x0000)
+        buf = list(initial); cursor = len(buf)
         ui.draw_input_bar(''.join(buf), cursor, show_wifi=False)
         while True:
             _time.sleep_ms(20)
@@ -461,7 +471,8 @@ def show_file_manager(tft, kb):
         entries = _get_entries(path)
         n = len(entries) + 1   # +1 for Menu
         sel = min(sel, n - 1)
-        offset = max(0, min(offset, max(0, len(entries) - _FILE_ROWS)))
+        max_offset_row = max(0, (len(entries) + 1) // 2 - _FILE_ROWS)
+        offset = max(0, min(offset, max_offset_row * 2))
         _draw(entries, sel, offset, path)
 
         while True:
@@ -470,16 +481,33 @@ def show_file_manager(tft, kb):
             if ev is None: continue
             t, ch = ev
 
+            sel_row = sel // 2
+            sel_col = sel % 2
+            offset_row = offset // 2
+
             if t == kb.INPUT_SCROLL_DOWN:
-                if sel > 0:
-                    sel -= 1
-                    offset = min(offset, sel)
+                if sel_row > 0:
+                    sel = (sel_row - 1) * 2 + sel_col
+                    if sel // 2 < offset_row:
+                        offset = (sel // 2) * 2
                     _draw(entries, sel, offset, path)
             elif t == kb.INPUT_SCROLL_UP:
-                if sel < n - 1:
+                new_sel = (sel_row + 1) * 2 + sel_col
+                if new_sel >= len(entries):      # col unavailable, fall to col 0
+                    new_sel = (sel_row + 1) * 2
+                new_sel = min(new_sel, n - 1)
+                if new_sel != sel:
+                    sel = new_sel
+                    if sel // 2 >= offset_row + _FILE_ROWS:
+                        offset = (sel // 2 - _FILE_ROWS + 1) * 2
+                    _draw(entries, sel, offset, path)
+            elif t == kb.INPUT_CURSOR_LEFT:
+                if sel_col == 1:
+                    sel -= 1
+                    _draw(entries, sel, offset, path)
+            elif t == kb.INPUT_CURSOR_RIGHT:
+                if sel_col == 0 and sel + 1 < n:
                     sel += 1
-                    if sel < len(entries):
-                        offset = max(offset, sel - _FILE_ROWS + 1)
                     _draw(entries, sel, offset, path)
             elif t == kb.INPUT_MODEL_MENU:
                 return
@@ -499,10 +527,8 @@ def show_file_manager(tft, kb):
                     else:
                         path = _join(path, name)
                     sel = 0; offset = 0
-                elif name.endswith('.py'):
-                    _run_file(tft, kb, _join(path, name))
                 else:
-                    _draw(entries, sel, offset, path, hint=name + ': not runnable')
+                    _draw(entries, sel, offset, path, hint='use e to execute')
                     _time.sleep_ms(1500)
                 break
 
@@ -541,11 +567,21 @@ def show_file_manager(tft, kb):
                         _time.sleep_ms(1500)
                 break
 
+            elif t == kb.INPUT_CHAR and ch == 'f':
+                new_dir = _text_prompt('New folder:')
+                if new_dir:
+                    try:
+                        uos.mkdir(_join(path, new_dir))
+                    except Exception as e:
+                        _draw(entries, sel, offset, path, hint='Error: ' + str(e)[:28])
+                        _time.sleep_ms(1500)
+                break
+
             elif t == kb.INPUT_CHAR and ch == 'r':
                 if not entries: continue
                 name, is_dir = entries[sel]
                 if name == '..': continue
-                new_name = _rename_prompt(name)
+                new_name = _text_prompt('Rename to:', name)
                 if new_name and new_name != name:
                     try:
                         uos.rename(_join(path, name), _join(path, new_name))
