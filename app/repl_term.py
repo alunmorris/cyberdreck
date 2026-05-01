@@ -315,154 +315,223 @@ def run(tft, kb):
             _draw_input()
 
 
-def show_file_picker(tft, kb):
+def _run_file(tft, kb, path):
+    import gc, machine, network, _thread
+    import time as _time
+    tft.fill(0x0000)
+    term = _TFTTerminal(tft, kb)
+    def _print(*args, **kwargs):
+        sep = kwargs.get('sep', ' ')
+        end = kwargs.get('end', '\n')
+        term.write(sep.join(str(a) for a in args) + end)
+    ns = dict(globals())
+    ns.update({'__name__': '__main__', 'gc': gc, 'machine': machine,
+               'network': network, 'print': _print, 'tft': tft,
+               'font14': font14, 'mono13': mono13, '_TFTTerminal': _TFTTerminal})
+    result = [None]
+    def _run():
+        try:
+            exec(open(path).read(), ns)
+        except Exception as e:
+            result[0] = e
+        if result[0] is None:
+            result[0] = True
+    _thread.start_new_thread(_run, ())
+    while result[0] is None:
+        _time.sleep_ms(20)
+        ev = kb.poll()
+        if ev is not None:
+            t = ev[0]
+            if t == kb.INPUT_SCROLL_UP:   term.scroll_down(1)
+            elif t == kb.INPUT_SCROLL_DOWN: term.scroll_up(1)
+    hint_y = (config.MAX_VIS - 1) * config.LINE_H
+    if isinstance(result[0], Exception):
+        e = result[0]
+        tft.fill(0x0000)
+        tft.write(font14, type(e).__name__ + ':', 2, 0, 0xF800, 0x0000)
+        msg = str(e)
+        for row in range(min(4, config.MAX_VIS - 2)):
+            chunk = msg[row * 38 : (row + 1) * 38]
+            if not chunk: break
+            tft.write(font14, chunk, 2, (row + 1) * config.LINE_H, 0xFFFF, 0x0000)
+    tft.fill_rect(0, hint_y, config.SCREEN_W, config.LINE_H, 0x0000)
+    tft.write(font14, 'Enter to exit', 2, hint_y, 0x07E0, 0x0000)
+    while True:
+        _time.sleep_ms(20)
+        ev = kb.poll()
+        if ev is None: continue
+        t = ev[0]
+        if t == kb.INPUT_SCROLL_UP:
+            term.scroll_down(1)
+            tft.fill_rect(0, hint_y, config.SCREEN_W, config.LINE_H, 0x0000)
+            tft.write(font14, 'Enter to exit', 2, hint_y, 0x07E0, 0x0000)
+        elif t == kb.INPUT_SCROLL_DOWN:
+            term.scroll_up(1)
+            tft.fill_rect(0, hint_y, config.SCREEN_W, config.LINE_H, 0x0000)
+            tft.write(font14, 'Enter to exit', 2, hint_y, 0x07E0, 0x0000)
+        elif t in (kb.INPUT_ENTER, kb.INPUT_MODEL_MENU):
+            break
+
+
+def show_file_manager(tft, kb):
     import uos, time as _time
 
-    _FILE_ROWS = config.MAX_VIS - 2   # rows between title and Menu
+    _FILE_ROWS = config.MAX_VIS - 2
 
-    def _get_files():
+    def _get_entries(path):
+        entries = []
         try:
-            return sorted(f for f in uos.listdir('/') if f.endswith('.py') and f not in _HIDDEN)
+            for item in uos.ilistdir(path):
+                name, ftype = item[0], item[1]
+                is_dir = bool(ftype & 0x4000)
+                if path == '/' and name in _HIDDEN:
+                    continue
+                entries.append((name, is_dir))
         except Exception:
-            return []
+            pass
+        entries.sort(key=lambda e: (0 if e[1] else 1, e[0].lower()))
+        if path != '/':
+            entries.insert(0, ('..', True))
+        return entries
 
-    def _draw(files, sel, offset):
+    def _join(path, name):
+        return ('/' + name) if path == '/' else (path + '/' + name)
+
+    def _draw(entries, sel, offset, path, hint=''):
         tft.fill(0x0000)
-        tft.write(font14, 'Run a program:', 2, 0, 0x03E0, 0x0000)
+        hdr = path if len(path) <= 30 else '...' + path[-27:]
+        tft.write(font14, 'Files: ' + hdr, 2, 0, 0x03E0, 0x0000)
         for i in range(_FILE_ROWS):
-            fi    = offset + i
+            fi = offset + i
             row_y = (i + 1) * config.LINE_H
-            if fi < len(files):
-                fg, bg = (0x0000, 0xFFFF) if fi == sel else (0xFFFF, 0x0000)
-                tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, bg)
-                tft.write(font14, files[fi][:40], 2, row_y, fg, bg)
+            if fi < len(entries):
+                name, is_dir = entries[fi]
+                label = (name + '/') if (is_dir and name != '..') else name
+                if fi == sel:
+                    tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
+                    tft.write(font14, label[:38], 2, row_y, 0x0000, 0xFFFF)
+                else:
+                    fg = 0xFFE0 if is_dir else (0x07FF if name.endswith('.py') else 0xFFFF)
+                    tft.write(font14, label[:38], 2, row_y, fg, 0x0000)
             else:
                 tft.fill_rect(0, row_y, config.SCREEN_W, config.LINE_H, 0x0000)
-        menu_y = (config.MAX_VIS - 1) * config.LINE_H
-        if sel == len(files):
-            tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0xFFFF)
-            tft.write(font14, 'Menu', 2, menu_y, 0x0000, 0xFFFF)
+        hint_y = (config.MAX_VIS - 1) * config.LINE_H
+        tft.fill_rect(0, hint_y, config.SCREEN_W, config.LINE_H, 0x0000)
+        if hint:
+            tft.write(font14, hint[:38], 2, hint_y, config.COL_AI, 0x0000)
         else:
-            tft.fill_rect(0, menu_y, config.SCREEN_W, config.LINE_H, 0x0000)
-            tft.write(font14, 'Menu', 2, menu_y, 0x07E0, 0x0000)
+            tft.write(font14, 'Del=del  r=rename  Menu=exit', 2, hint_y, 0x4208, 0x0000)
 
-    sel    = 0
-    offset = 0
+    def _rename_prompt(name):
+        import ui
+        tft.fill(0x0000)
+        tft.write(font14, 'Rename to:', 2, 0, config.COL_AI, 0x0000)
+        tft.write(font14, name[:36], 2, config.LINE_H, 0xFFFF, 0x0000)
+        buf = list(name); cursor = len(buf)
+        ui.draw_input_bar(''.join(buf), cursor, show_wifi=False)
+        while True:
+            _time.sleep_ms(20)
+            ev = kb.poll()
+            if ev is None: continue
+            t, ch = ev
+            if t == kb.INPUT_ENTER:
+                return ''.join(buf).strip() or None
+            elif t == kb.INPUT_MODEL_MENU:
+                return None
+            elif t == kb.INPUT_CHAR and len(buf) < 40:
+                buf.insert(cursor, ch); cursor += 1
+            elif t == kb.INPUT_BACKSPACE and cursor > 0:
+                buf.pop(cursor - 1); cursor -= 1
+            elif t == kb.INPUT_DELETE and cursor < len(buf):
+                buf.pop(cursor)
+            elif t == kb.INPUT_CURSOR_LEFT and cursor > 0:
+                cursor -= 1
+            elif t == kb.INPUT_CURSOR_RIGHT and cursor < len(buf):
+                cursor += 1
+            else:
+                continue
+            ui.draw_input_bar(''.join(buf), cursor, show_wifi=False)
+
+    path = '/'; sel = 0; offset = 0
 
     while True:
-        files   = _get_files()
-        n_items = len(files) + 1
-        sel     = min(sel, n_items - 1)
-        offset  = max(0, min(offset, max(0, len(files) - _FILE_ROWS)))
-        _draw(files, sel, offset)
+        entries = _get_entries(path)
+        n = len(entries)
+        sel = min(sel, max(0, n - 1))
+        offset = max(0, min(offset, max(0, n - _FILE_ROWS)))
+        _draw(entries, sel, offset, path)
 
         while True:
             _time.sleep_ms(20)
             ev = kb.poll()
-            if ev is None:
-                continue
+            if ev is None: continue
             t, ch = ev
 
             if t == kb.INPUT_SCROLL_DOWN:
                 if sel > 0:
                     sel -= 1
-                    if sel < len(files):
-                        offset = min(offset, sel)
-                    _draw(files, sel, offset)
+                    offset = min(offset, sel)
+                    _draw(entries, sel, offset, path)
             elif t == kb.INPUT_SCROLL_UP:
-                if sel < n_items - 1:
+                if sel < n - 1:
                     sel += 1
-                    if sel < len(files):
-                        offset = max(offset, sel - _FILE_ROWS + 1)
-                    _draw(files, sel, offset)
-            elif t == kb.INPUT_ENTER:
-                if sel == len(files):
-                    return
-                path = '/' + files[sel]
-                try:
-                    import gc, machine, network
-                    import _thread
-                    tft.fill(0x0000)
-                    term = _TFTTerminal(tft, kb)
-                    def _print(*args, **kwargs):
-                        sep = kwargs.get('sep', ' ')
-                        end = kwargs.get('end', '\n')
-                        term.write(sep.join(str(a) for a in args) + end)
-                    ns = dict(globals())
-                    ns.update({'__name__': '__main__', 'gc': gc,
-                               'machine': machine, 'network': network,
-                               'print': _print, 'tft': tft,
-                               'font14': font14, 'mono13': mono13,
-                               '_TFTTerminal': _TFTTerminal})
-                    result = [None]
-                    def _run():
-                        try:
-                            exec(open(path).read(), ns)
-                        except Exception as e:
-                            result[0] = e
-                        result[0] = result[0] or True
-                    _thread.start_new_thread(_run, ())
-                    while result[0] is None:
-                        _time.sleep_ms(20)
-                        ev2 = kb.poll()
-                        if ev2 is not None:
-                            t2 = ev2[0]
-                            if t2 == kb.INPUT_SCROLL_UP:
-                                term.scroll_down(1)
-                            elif t2 == kb.INPUT_SCROLL_DOWN:
-                                term.scroll_up(1)
-                    # Program finished — show prompt; scrolling still works
-                    tft.fill_rect(0, (config.MAX_VIS - 1) * config.LINE_H,
-                                  config.SCREEN_W, config.LINE_H, 0x0000)
-                    if isinstance(result[0], Exception):
-                        e = result[0]
-                        tft.fill(0x0000)
-                        tft.write(font14, type(e).__name__ + ':', 2, 0, 0xF800, 0x0000)
-                        msg = str(e)
-                        for row in range(min(4, config.MAX_VIS - 2)):
-                            chunk = msg[row * 38 : (row + 1) * 38]
-                            if not chunk:
-                                break
-                            tft.write(font14, chunk, 2, (row + 1) * config.LINE_H, 0xFFFF, 0x0000)
-                    tft.fill_rect(0, (config.MAX_VIS - 1) * config.LINE_H,
-                                  config.SCREEN_W, config.LINE_H, 0x0000)
-                    tft.write(font14, 'Enter to exit', 2,
-                              (config.MAX_VIS - 1) * config.LINE_H, 0x07E0, 0x0000)
-                    while True:
-                        _time.sleep_ms(20)
-                        ev2 = kb.poll()
-                        if ev2 is not None:
-                            t2 = ev2[0]
-                            if t2 == kb.INPUT_SCROLL_UP:
-                                term.scroll_down(1)
-                                tft.fill_rect(0, (config.MAX_VIS - 1) * config.LINE_H,
-                                              config.SCREEN_W, config.LINE_H, 0x0000)
-                                tft.write(font14, 'Enter to exit', 2,
-                                          (config.MAX_VIS - 1) * config.LINE_H, 0x07E0, 0x0000)
-                            elif t2 == kb.INPUT_SCROLL_DOWN:
-                                term.scroll_up(1)
-                                tft.fill_rect(0, (config.MAX_VIS - 1) * config.LINE_H,
-                                              config.SCREEN_W, config.LINE_H, 0x0000)
-                                tft.write(font14, 'Enter to exit', 2,
-                                          (config.MAX_VIS - 1) * config.LINE_H, 0x07E0, 0x0000)
-                            elif t2 == kb.INPUT_ENTER:
-                                break
-                except Exception as e:
-                    tft.fill(0x0000)
-                    tft.write(font14, type(e).__name__ + ':', 2, 0, 0xF800, 0x0000)
-                    msg = str(e)
-                    for row in range(min(4, config.MAX_VIS - 2)):
-                        chunk = msg[row * 38 : (row + 1) * 38]
-                        if not chunk:
-                            break
-                        tft.write(font14, chunk, 2, (row + 1) * config.LINE_H, 0xFFFF, 0x0000)
-                    tft.write(font14, 'Enter to exit', 2,
-                              (config.MAX_VIS - 1) * config.LINE_H, 0x07E0, 0x0000)
-                    while True:
-                        _time.sleep_ms(20)
-                        ev2 = kb.poll()
-                        if ev2 is not None and ev2[0] == kb.INPUT_ENTER:
-                            break
-                break   # re-fetch file list and redraw
+                    offset = max(offset, sel - _FILE_ROWS + 1)
+                    _draw(entries, sel, offset, path)
             elif t == kb.INPUT_MODEL_MENU:
                 return
+
+            elif t == kb.INPUT_ENTER:
+                if not entries: break
+                name, is_dir = entries[sel]
+                if is_dir:
+                    if name == '..':
+                        p = path.rstrip('/')
+                        idx = p.rfind('/')
+                        path = p[:idx] if idx > 0 else '/'
+                    else:
+                        path = _join(path, name)
+                    sel = 0; offset = 0
+                elif name.endswith('.py'):
+                    _run_file(tft, kb, _join(path, name))
+                else:
+                    _draw(entries, sel, offset, path, hint=name + ': not runnable')
+                    _time.sleep_ms(1500)
+                break
+
+            elif t == kb.INPUT_DELETE:
+                if not entries: continue
+                name, is_dir = entries[sel]
+                if name == '..': continue
+                _draw(entries, sel, offset, path,
+                      hint='Delete ' + name[:20] + '? Enter=Yes Menu=No')
+                confirmed = False
+                while True:
+                    _time.sleep_ms(20)
+                    ev2 = kb.poll()
+                    if ev2 is None: continue
+                    t2, _ = ev2
+                    if t2 == kb.INPUT_ENTER:   confirmed = True; break
+                    elif t2 == kb.INPUT_MODEL_MENU: break
+                if confirmed:
+                    try:
+                        fp = _join(path, name)
+                        uos.rmdir(fp) if is_dir else uos.remove(fp)
+                        sel = max(0, sel - 1)
+                    except Exception as e:
+                        _draw(entries, sel, offset, path, hint='Error: ' + str(e)[:28])
+                        _time.sleep_ms(1500)
+                break
+
+            elif t == kb.INPUT_CHAR and ch == 'r':
+                if not entries: continue
+                name, is_dir = entries[sel]
+                if name == '..': continue
+                new_name = _rename_prompt(name)
+                if new_name and new_name != name:
+                    try:
+                        uos.rename(_join(path, name), _join(path, new_name))
+                    except Exception as e:
+                        entries = _get_entries(path)
+                        _draw(entries, sel, offset, path, hint='Error: ' + str(e)[:28])
+                        _time.sleep_ms(1500)
+                break

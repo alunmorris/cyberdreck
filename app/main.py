@@ -64,7 +64,7 @@ def show_model_menu():
             _tft.write(font14, f"{key} {label[:36]}", 2, (idx + 1) * config.LINE_H, 0xFFFF, bg)
         base = len(items) + 2
         _tft.write(font14, "m MicroPython REPL", 2, base * config.LINE_H, 0xFFFF, bg)
-        _tft.write(font14, "r Run a program",    2, (base + 1) * config.LINE_H, 0xFFFF, bg)
+        _tft.write(font14, "f File manager",      2, (base + 1) * config.LINE_H, 0xFFFF, bg)
         _tft.write(font14, "g Get programs",     2, (base + 2) * config.LINE_H, 0xFFFF, bg)
         _tft.write(font14, "w WiFi setup",       2, (base + 3) * config.LINE_H, 0xFFFF, bg)
 
@@ -82,9 +82,9 @@ def show_model_menu():
                 repl_term.run(_tft, hal_kb)
                 _draw_menu()
                 continue
-            if ch == 'r':
+            if ch == 'f':
                 import repl_term
-                repl_term.show_file_picker(_tft, hal_kb)
+                repl_term.show_file_manager(_tft, hal_kb)
                 _draw_menu()
                 continue
             if ch == 'g':
