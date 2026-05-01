@@ -89,7 +89,7 @@ def _draw_ap_list(tft, aps, sel):
     tft.write(font14, "Select WiFi:", 2, 0, 0x03E0, 0x0000)
     for i, (ssid, db) in enumerate(aps):
         y = (i + 1) * config.LINE_H
-        label = f"{ssid[:24]} {_rssi_bars(db)}"
+        label = f"{ssid[:28]} {db}dB"
         if i == sel:
             tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0xFFFF)
             tft.write(font14, label, 2, y, 0x0000, 0xFFFF)

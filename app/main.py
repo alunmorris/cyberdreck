@@ -113,16 +113,20 @@ def ensure_wifi():
         return True
     wifi_mgr.load_creds()
     if wifi_mgr._creds:
+        import fonts.dejavu14_ru as font14
         ssid = wifi_mgr._creds[0]['ssid']
         pwd  = wifi_mgr._creds[0]['pass']
-        import fonts.dejavu14_ru as font14
         _tft.fill(0x0000)
-        _tft.write(font14, f"WiFi: {ssid[:28]}", 2, 0, config.COL_AI, 0x0000)
-        _tft.write(font14, "connecting...", 2, config.LINE_H, 0xFFFF, 0x0000)
-        if wifi_mgr.connect(ssid, pwd):
-            _wifi_ok = True
-            hal_kb.set_led(True)
-            return True
+        _tft.write(font14, "WiFi: scanning...", 2, 0, config.COL_AI, 0x0000)
+        visible = {s for s, _ in wifi_mgr.scan_aps()}
+        if ssid in visible:
+            _tft.fill(0x0000)
+            _tft.write(font14, f"WiFi: {ssid[:28]}", 2, 0, config.COL_AI, 0x0000)
+            _tft.write(font14, "connecting...", 2, config.LINE_H, 0xFFFF, 0x0000)
+            if wifi_mgr.connect(ssid, pwd):
+                _wifi_ok = True
+                hal_kb.set_led(True)
+                return True
     ok = wifi_mgr.select_ap(_tft, hal_kb)
     _wifi_ok = ok
     if ok:
