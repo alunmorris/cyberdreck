@@ -4,18 +4,21 @@ PORT=${1:-/dev/ttyUSB0}
 APP=/home/alun/esp32/micropython/app
 
 echo "Uploading to $PORT..."
-mpremote connect $PORT \
-    mkdir :fonts \
-    cp $APP/config.py    :config.py \
-    cp $APP/secrets.py   :secrets.py \
-    cp $APP/hal_kb.py    :hal_kb.py \
-    cp $APP/display.py   :display.py \
-    cp $APP/writer.py    :writer.py \
-    cp $APP/fonts/dejavu14.py :fonts/dejavu14.py \
-    cp $APP/history.py   :history.py \
-    cp $APP/ui.py        :ui.py \
-    cp $APP/wifi_mgr.py  :wifi_mgr.py \
-    cp $APP/api.py       :api.py \
-    cp $APP/main.py      :main.py \
-    reset
+mpremote connect $PORT mkdir :fonts 2>/dev/null || true
+mpremote connect $PORT cp $APP/config.py           :config.py
+mpremote connect $PORT cp $APP/secrets.py          :secrets.py
+mpremote connect $PORT cp $APP/hal_kb.py           :hal_kb.py
+mpremote connect $PORT cp $APP/display.py          :display.py
+mpremote connect $PORT cp $APP/writer.py           :writer.py
+mpremote connect $PORT cp $APP/fonts/dejavu14.py   :fonts/dejavu14.py
+mpremote connect $PORT cp $APP/fonts/dejavu14_ru.py :fonts/dejavu14_ru.py
+mpremote connect $PORT cp $APP/fonts/mono13.py     :fonts/mono13.py
+mpremote connect $PORT cp $APP/history.py          :history.py
+mpremote connect $PORT cp $APP/ui.py               :ui.py
+mpremote connect $PORT cp $APP/wifi_mgr.py         :wifi_mgr.py
+mpremote connect $PORT cp $APP/api.py              :api.py
+mpremote connect $PORT cp $APP/repl_term.py        :repl_term.py
+mpremote connect $PORT cp $APP/getprog.py          :getprog.py
+mpremote connect $PORT cp $APP/main.py             :main.py
+mpremote connect $PORT reset
 echo "Done."
