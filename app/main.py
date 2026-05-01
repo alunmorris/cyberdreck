@@ -115,6 +115,10 @@ def ensure_wifi():
     if wifi_mgr._creds:
         ssid = wifi_mgr._creds[0]['ssid']
         pwd  = wifi_mgr._creds[0]['pass']
+        import fonts.dejavu14_ru as font14
+        _tft.fill(0x0000)
+        _tft.write(font14, f"WiFi: {ssid[:28]}", 2, 0, config.COL_AI, 0x0000)
+        _tft.write(font14, "connecting...", 2, config.LINE_H, 0xFFFF, 0x0000)
         if wifi_mgr.connect(ssid, pwd):
             _wifi_ok = True
             hal_kb.set_led(True)

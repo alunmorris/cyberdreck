@@ -99,14 +99,25 @@ def _draw_ap_list(tft, aps, sel):
 def ap_picker(tft, kb):
     """Scan and show AP list. Returns (ssid, rssi) or None if cancelled."""
     import fonts.dejavu14_ru as font14
-    tft.fill(0x0000)
-    tft.write(font14, "Scanning WiFi...", 2, 0, config.COL_AI, 0x0000)
-    aps = scan_aps()
-    if not aps:
+    while True:
+        tft.fill(0x0000)
+        tft.write(font14, "Scanning WiFi...", 2, 0, config.COL_AI, 0x0000)
+        aps = scan_aps()
+        if aps:
+            break
         tft.fill(0x0000)
         tft.write(font14, "No networks found", 2, 0, config.COL_ERROR, 0x0000)
-        time.sleep(2)
-        return None
+        tft.write(font14, "Enter: retry  Menu: skip", 2, config.LINE_H * 2, 0xFFFF, 0x0000)
+        while True:
+            time.sleep_ms(20)
+            ev = kb.poll()
+            if ev is None:
+                continue
+            t, _ = ev
+            if t == kb.INPUT_ENTER:
+                break          # re-scan
+            if t == kb.INPUT_MODEL_MENU:
+                return None    # give up
     sel = 0
     _draw_ap_list(tft, aps, sel)
     while True:
