@@ -118,7 +118,8 @@ def ensure_wifi():
         pwd  = wifi_mgr._creds[0]['pass']
         _tft.fill(0x0000)
         _tft.write(font14, "WiFi: scanning...", 2, 0, config.COL_AI, 0x0000)
-        visible = {s for s, _ in wifi_mgr.scan_aps()}
+        aps = wifi_mgr.scan_aps()
+        visible = {s for s, _ in aps}
         if ssid in visible:
             _tft.fill(0x0000)
             _tft.write(font14, f"WiFi: {ssid[:28]}", 2, 0, config.COL_AI, 0x0000)
@@ -127,6 +128,12 @@ def ensure_wifi():
                 _wifi_ok = True
                 hal_kb.set_led(True)
                 return True
+        else:
+            ok = wifi_mgr.select_ap(_tft, hal_kb, aps)
+            _wifi_ok = ok
+            if ok:
+                hal_kb.set_led(True)
+            return ok
     ok = wifi_mgr.select_ap(_tft, hal_kb)
     _wifi_ok = ok
     if ok:

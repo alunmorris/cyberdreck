@@ -96,18 +96,21 @@ def _draw_ap_list(tft, aps, sel):
         else:
             tft.write(font14, label, 2, y, 0xFFFF, 0x0000)
 
-def ap_picker(tft, kb):
-    """Scan and show AP list. Returns (ssid, rssi) or None if cancelled."""
+def ap_picker(tft, kb, aps=None):
+    """Scan and show AP list. Returns (ssid, rssi) or None if cancelled.
+    Pass aps to skip the initial scan."""
     import fonts.dejavu14_ru as font14
     while True:
-        tft.fill(0x0000)
-        tft.write(font14, "Scanning WiFi...", 2, 0, config.COL_AI, 0x0000)
-        aps = scan_aps()
+        if aps is None:
+            tft.fill(0x0000)
+            tft.write(font14, "Scanning WiFi...", 2, 0, config.COL_AI, 0x0000)
+            aps = scan_aps()
         if aps:
             break
         tft.fill(0x0000)
         tft.write(font14, "No networks found", 2, 0, config.COL_ERROR, 0x0000)
         tft.write(font14, "Enter: retry  Menu: skip", 2, config.LINE_H * 2, 0xFFFF, 0x0000)
+        aps = None  # force fresh scan on retry
         while True:
             time.sleep_ms(20)
             ev = kb.poll()
@@ -165,11 +168,12 @@ def enter_password(tft, kb, ssid):
         elif t == kb.INPUT_CURSOR_RIGHT and cursor < len(buf):
             cursor += 1
 
-def select_ap(tft, kb):
+def select_ap(tft, kb, aps=None):
     """Full flow: scan → pick → password → connect. Returns True if connected."""
     import fonts.dejavu14_ru as font14
     while True:                          # outer: re-scan loop
-        choice = ap_picker(tft, kb)
+        choice = ap_picker(tft, kb, aps)
+        aps = None                       # only reuse pre-scanned on first pass
         if choice is None:
             return False
         ssid, _ = choice
