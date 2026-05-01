@@ -66,6 +66,7 @@ def show_model_menu():
         _tft.write(font14, "m MicroPython REPL", 2, base * config.LINE_H, 0xFFFF, bg)
         _tft.write(font14, "r Run a program",    2, (base + 1) * config.LINE_H, 0xFFFF, bg)
         _tft.write(font14, "g Get programs",     2, (base + 2) * config.LINE_H, 0xFFFF, bg)
+        _tft.write(font14, "w WiFi setup",       2, (base + 3) * config.LINE_H, 0xFFFF, bg)
 
     _draw_menu()
 
@@ -91,6 +92,10 @@ def show_model_menu():
                 getprog.run(_tft, hal_kb)
                 _draw_menu()
                 continue
+            if ch == 'w':
+                wifi_mgr.select_ap(_tft, hal_kb)
+                _draw_menu()
+                continue
             if ch.isdigit():
                 for key, label, grok, groq, gidx in items:
                     if ch == key:
@@ -114,7 +119,7 @@ def ensure_wifi():
             _wifi_ok = True
             hal_kb.set_led(True)
             return True
-    ok = wifi_mgr.select_ap(_tft)
+    ok = wifi_mgr.select_ap(_tft, hal_kb)
     _wifi_ok = ok
     if ok:
         hal_kb.set_led(True)
