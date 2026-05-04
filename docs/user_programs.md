@@ -34,6 +34,7 @@ These names are available without importing:
 | `sys` | module | |
 | `gc` | module | `gc.collect()`, `gc.mem_free()` |
 | `machine` | module | `Pin`, `I2C`, `SPI`, `reset()`, … |
+| `kb` | module | Keyboard — `kb.poll()`, `kb.INPUT_CHAR`, … |
 | `network` | module | WiFi (already connected at app level) |
 
 Everything else must be imported normally:
@@ -152,6 +153,78 @@ for i in range(100):
     mprint("\x1b[2K+-------------------+", end="")
     time.sleep_ms(100)
 ```
+
+---
+
+## Keyboard input
+
+`kb` is available as a global — no import needed. Call `kb.poll()` in a loop. It is non-blocking and returns `None` immediately if no key is waiting, so sleep a few milliseconds between calls to yield the CPU.
+
+```python
+while True:
+    ev = kb.poll()
+    if ev is None:
+        time.sleep_ms(20)
+        continue
+    ev_type, ch = ev
+    if ev_type == kb.INPUT_CHAR:
+        print(ch, end='')
+    elif ev_type == kb.INPUT_ENTER:
+        print()
+        break
+    elif ev_type == kb.INPUT_MODEL_MENU:
+        break   # menu key — treat as cancel / exit
+```
+
+### Event types
+
+| Constant | `ch` | Meaning |
+|---|---|---|
+| `kb.INPUT_CHAR` | The character | Printable key pressed |
+| `kb.INPUT_ENTER` | `''` | Enter / Return |
+| `kb.INPUT_BACKSPACE` | `''` | Backspace |
+| `kb.INPUT_DELETE` | `''` | Delete |
+| `kb.INPUT_CURSOR_LEFT` | `''` | Left arrow |
+| `kb.INPUT_CURSOR_RIGHT` | `''` | Right arrow |
+| `kb.INPUT_SCROLL_UP` | `''` | Scroll wheel up |
+| `kb.INPUT_SCROLL_DOWN` | `''` | Scroll wheel down |
+| `kb.INPUT_MODEL_MENU` | `''` | Menu key — good as a cancel/exit signal |
+
+`ch` is a plain Python string: the typed character for `INPUT_CHAR`, empty string for everything else.
+
+### Reading a line of text
+
+```python
+def input_line(prompt=''):
+    if prompt:
+        print(prompt, end='')
+    buf = []
+    while True:
+        ev = kb.poll()
+        if ev is None:
+            time.sleep_ms(20)
+            continue
+        t, ch = ev
+        if t == kb.INPUT_ENTER:
+            print()
+            return ''.join(buf)
+        elif t == kb.INPUT_CHAR:
+            buf.append(ch)
+            print(ch, end='')
+        elif t == kb.INPUT_BACKSPACE and buf:
+            buf.pop()
+            print('\x08 \x08', end='')   # erase last character on screen
+        elif t == kb.INPUT_MODEL_MENU:
+            return None   # cancelled
+
+name = input_line('Enter name: ')
+if name:
+    print(f'Hello, {name}!')
+```
+
+### Note on scroll keys
+
+The program launcher intercepts `INPUT_SCROLL_UP` / `INPUT_SCROLL_DOWN` to scroll the terminal. If your program polls those events in a tight loop it will receive them instead. This is fine if you want to handle scrolling yourself; just be aware the launcher's scroll handler won't fire while your polling loop is active.
 
 ---
 
@@ -278,5 +351,5 @@ except Exception as e:
 - **Padding**: when overwriting with `\r`, pad shorter strings with spaces so remnants of longer text don't show: `f"{value:<20}"`.
 - **Memory**: call `gc.collect()` before allocating large buffers. `gc.mem_free()` returns available heap bytes.
 - **Exit cleanly**: at the top level of a MicroPython script, execution simply ends — the file picker resumes normally.
-- **Avoid `input()`**: there is no stdin; use the keyboard via `hal_kb` if you need interactive input (`import hal_kb; hal_kb.poll()`).
+- **Avoid `input()`**: there is no stdin; use `kb.poll()` for interactive input — see the **Keyboard input** section above.
 - **GPIO**: `machine.Pin`, `I2C`, `SPI`, `ADC`, `PWM`, `UART`, and `Timer` are all available via `from machine import ...`. GPIO15 is the app status LED on ESP32-S2 mini (`config.LED_PIN`) — avoid it in user programs.

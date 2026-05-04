@@ -14,20 +14,24 @@ fs = LittleFS(block_size=BLOCK_SIZE, block_count=BLOCK_COUNT,
               prog_size=256, read_size=256, lookahead_size=32, disk_version=0x00020000)
 
 FILES = [
-    ('config.py',         'config.py'),
-    ('secrets.py',        'secrets.py'),
-    ('hal_kb.py',         'hal_kb.py'),
-    ('display.py',        'display.py'),
-    ('writer.py',         'writer.py'),
-    ('history.py',        'history.py'),
-    ('ui.py',             'ui.py'),
-    ('wifi_mgr.py',       'wifi_mgr.py'),
-    ('api.py',            'api.py'),
-    ('main.py',           'main.py'),
+    ('config.py',           'config.py'),
+    ('secrets.py',          'secrets.py'),
+    ('hal_kb.py',           'hal_kb.py'),
+    ('display.py',          'display.py'),
+    ('writer.py',           'writer.py'),
+    ('history.py',          'history.py'),
+    ('ui.py',               'ui.py'),
+    ('wifi_mgr.py',         'wifi_mgr.py'),
+    ('api.py',              'api.py'),
+    ('repl_term.py',        'repl_term.py'),
+    ('getprog.py',          'getprog.py'),
+    ('main.py',             'main.py'),
 ]
 
 FONT_FILES = [
+    ('fonts/dejavu14.py',    'fonts/dejavu14.py'),
     ('fonts/dejavu14_ru.py', 'fonts/dejavu14_ru.py'),
+    ('fonts/mono13.py',      'fonts/mono13.py'),
 ]
 
 fs.mkdir('fonts')
@@ -50,6 +54,5 @@ with open(OUT, 'wb') as f:
 print(f'\nWrote {OUT} ({len(image)} bytes)')
 print()
 print('Now put the board into download mode (hold BOOT, tap RESET, release BOOT)')
-print('then run from Windows:')
-print(f'  esptool.py --chip esp32s2 --port COM10 write_flash 0x200000 '
-      f'\\\\wsl.localhost\\Ubuntu-24.04\\home\\alun\\esp32\\micropython\\tools\\vfs.img')
+print('then run:')
+print(f'  esptool --chip esp32s2 --port /dev/ttyACM0 write_flash 0x200000 {OUT}')

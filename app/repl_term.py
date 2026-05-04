@@ -5,7 +5,6 @@ import fonts.dejavu14_ru as font14
 import fonts.mono13 as mono13
 
 _BUF_LINES = 200
-_MAX_CHARS  = 42
 
 _HIDDEN = frozenset({
     'main.py', 'config.py', 'secrets.py', 'hal_kb.py', 'display.py',
@@ -19,6 +18,8 @@ class _TFTTerminal:
         self._tft      = tft
         self._kb       = kb
         self._font     = font or font14
+        cw = tft.write_len(self._font, 'W')
+        self._max_chars = (config.SCREEN_W - 4) // cw if cw else 42
         self._lines    = [['', config.COL_AI]]
         self._scroll   = 0
         self._col      = 0   # write column in current line
@@ -32,14 +33,14 @@ class _TFTTerminal:
         y = view_pos * config.LINE_H
         self._tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0x0000)
         if text:
-            self._tft.write(self._font, text[:_MAX_CHARS], 2, y, color, 0x0000)
+            self._tft.write(self._font, text[:self._max_chars], 2, y, color, 0x0000)
 
     def _full_redraw(self):
         self._tft.fill(0x0000)
         start = self._view_start()
         for i, (line, col) in enumerate(self._lines[start : start + config.MAX_VIS]):
             if line:
-                self._tft.write(self._font, line[:_MAX_CHARS], 2, i * config.LINE_H, col, 0x0000)
+                self._tft.write(self._font, line[:self._max_chars], 2, i * config.LINE_H, col, 0x0000)
 
     def scroll_up(self, n=1):
         max_scroll = max(0, len(self._lines) - config.MAX_VIS)
@@ -97,7 +98,7 @@ class _TFTTerminal:
                             c      = max(1, params[1] if len(params) > 1 else 1) - 1
                             bottom = max(0, len(self._lines) - config.MAX_VIS)
                             self._cur_line = max(0, min(len(self._lines) - 1, bottom + r))
-                            self._col      = max(0, min(_MAX_CHARS - 1, c))
+                            self._col      = max(0, min(self._max_chars - 1, c))
                             first_dirty = min(first_dirty, self._cur_line)
                         i += 1
                 continue
@@ -124,7 +125,7 @@ class _TFTTerminal:
                 else:
                     self._lines[self._cur_line][0] = text + ch
                 self._col += 1
-                if self._col >= _MAX_CHARS:
+                if self._col >= self._max_chars:
                     if self._cur_line == len(self._lines) - 1:
                         self._lines.append(['', color])
                         if len(self._lines) > _BUF_LINES:
@@ -220,8 +221,8 @@ def run(tft, kb):
             y = vp * config.LINE_H
             tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0x0000)
             if text:
-                tft.write(font14, text[:_MAX_CHARS], 2, y, config.COL_USER, 0x0000)
-            cx = 2 + tft.write_len(font14, (p + cur[:cur_pos])[:_MAX_CHARS])
+                tft.write(font14, text[:term._max_chars], 2, y, config.COL_USER, 0x0000)
+            cx = 2 + tft.write_len(font14, (p + cur[:cur_pos])[:term._max_chars])
             tft.fill_rect(cx, y + 2, 1, config.LINE_H - 4, config.COL_USER)
 
     _draw_input()
@@ -324,9 +325,20 @@ def _run_file(tft, kb, path):
         sep = kwargs.get('sep', ' ')
         end = kwargs.get('end', '\n')
         term.write(sep.join(str(a) for a in args) + end)
+    # The main thread is the sole caller of kb.poll() to avoid race conditions.
+    # Scroll events are handled immediately; everything else goes into this queue
+    # for the user program to read via the _KbProxy below.
+    _ev_queue = []
+
+    class _KbProxy:
+        def poll(self_):
+            return _ev_queue.pop(0) if _ev_queue else None
+        def __getattr__(self_, name):
+            return getattr(kb, name)
+
     ns = dict(globals())
     ns.update({'__name__': '__main__', 'gc': gc, 'machine': machine,
-               'network': network, 'print': _print, 'tft': tft,
+               'network': network, 'print': _print, 'tft': tft, 'kb': _KbProxy(),
                'font14': font14, 'mono13': mono13, '_TFTTerminal': _TFTTerminal})
     result = [None]
     def _run():
@@ -342,8 +354,9 @@ def _run_file(tft, kb, path):
         ev = kb.poll()
         if ev is not None:
             t = ev[0]
-            if t == kb.INPUT_SCROLL_UP:   term.scroll_down(1)
+            if t == kb.INPUT_SCROLL_UP:    term.scroll_down(1)
             elif t == kb.INPUT_SCROLL_DOWN: term.scroll_up(1)
+            else:                           _ev_queue.append(ev)
     hint_y = (config.MAX_VIS - 1) * config.LINE_H
     if isinstance(result[0], Exception):
         e = result[0]

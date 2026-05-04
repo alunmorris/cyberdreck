@@ -1,7 +1,7 @@
 // firmware/boards/CRACK_S2/mpconfigboard.h
 // CRACK_S2: ESP32-S2 Mini with USB OTG host mode (keyboard).
-// USB CDC disabled — REPL via UART0 (GPIO43=TX, GPIO44=RX) at 115200 baud.
-#define MICROPY_HW_BOARD_NAME "CRACK ESP32-S2"
+// USB CDC disabled — REPL via UART0 (GPIO8=TX, GPIO9=RX) at 115200 baud.
+#define MICROPY_HW_BOARD_NAME "Cyberdreck ESP32-S2"
 #define MICROPY_HW_MCU_NAME   "ESP32-S2"
 
 // 4MB flash, no PSRAM

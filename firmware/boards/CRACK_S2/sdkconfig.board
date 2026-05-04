@@ -1,10 +1,10 @@
 # firmware/boards/CRACK_S2/sdkconfig.board
-# Console on UART0, custom pins (GPIO1=TX, GPIO2=RX) so header pins are accessible via UART adapter
+# Console on UART0, custom pins (GPIO8=TX, GPIO9=RX) so header pins are accessible via UART adapter
 CONFIG_ESP_CONSOLE_UART_CUSTOM=y
 CONFIG_ESP_CONSOLE_UART_NUM=0
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
-CONFIG_ESP_CONSOLE_UART_TX_GPIO=33
-CONFIG_ESP_CONSOLE_UART_RX_GPIO=21
+CONFIG_ESP_CONSOLE_UART_TX_GPIO=8
+CONFIG_ESP_CONSOLE_UART_RX_GPIO=9
 
 # Disable USB device (CDC/serial) so OTG peripheral is free for usb_host
 CONFIG_ESP_CONSOLE_USB_CDC=n

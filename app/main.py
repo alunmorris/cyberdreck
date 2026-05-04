@@ -323,7 +323,7 @@ def main():
     ui.init(_tft)
 
     _tft.fill(0x0000)
-    _c3line(0, f"CRACK {config.VERSION}")
+    _c3line(0, f"Cyberdreck {config.VERSION}")
 
     wifi_mgr.load_creds()
     try:
