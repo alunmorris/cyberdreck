@@ -31,6 +31,7 @@ FILES = [
 FONT_FILES = [
     ('fonts/dejavu14.py',    'fonts/dejavu14.py'),
     ('fonts/dejavu14_ru.py', 'fonts/dejavu14_ru.py'),
+    ('fonts/dejavu24bold_ru.py', 'fonts/dejavu24bold_ru.py'),
     ('fonts/mono13.py',      'fonts/mono13.py'),
 ]
 

@@ -7,6 +7,7 @@ from machine import Pin
 
 import display, ui, history, wifi_mgr, api, config, hal_kb, secrets
 import fonts.dejavu14_ru as font14
+import fonts.dejavu24bold_ru as font24
 
 # ── State ──────────────────────────────────────────────────────────────────────
 _input_buf  = []
@@ -322,8 +323,12 @@ def main():
     _tft = display.init()
     ui.init(_tft)
 
+    _H24 = font24.HEIGHT  # 24
     _tft.fill(0x0000)
-    _c3line(0, f"Cyberdreck {config.VERSION}")
+    _tft.fill_rect(0, 0, config.SCREEN_W, _H24, config.COL_INVERT_BG)
+    _cx = (config.SCREEN_W - _tft.write_len(font24, "Cyberdreck")) // 2
+    _tft.write(font24, "Cyberdreck", _cx, 0, 0x0300, config.COL_INVERT_BG)
+    _c3line(_H24 + config.LINE_H, config.VERSION)  # blank line gap after title
 
     wifi_mgr.load_creds()
     try:
@@ -332,12 +337,12 @@ def main():
     except AttributeError:
         pass
 
-    _c3line(config.LINE_H, "WiFi: connecting...")
-    _c3line(config.LINE_H * 2, "USB keyboard init...")
+    _c3line(_H24 + config.LINE_H * 2, "WiFi: connecting...")
+    _c3line(_H24 + config.LINE_H * 3, "USB keyboard init...")
 
     found = hal_kb.init(timeout_ms=5000)
     if not found:
-        _c3line(config.LINE_H * 2, "Keyboard not found!", 0xF800)
+        _c3line(_H24 + config.LINE_H * 3, "Keyboard not found!", 0xF800)
         time.sleep(2)
 
     global _rssi
@@ -345,10 +350,10 @@ def main():
     if wifi_mgr.is_connected():
         _rssi = wifi_mgr.rssi()
         ssid  = wifi_mgr._wlan.config('ssid')
-        _c3line(config.LINE_H, f"WiFi: {ssid[:20]} {_rssi}dBm")
+        _c3line(_H24 + config.LINE_H * 2, f"WiFi: {ssid[:20]} {_rssi}dBm")
     else:
         _rssi = None
-        _c3line(config.LINE_H, "WiFi: not connected", config.COL_ERROR)
+        _c3line(_H24 + config.LINE_H * 2, "WiFi: not connected", config.COL_ERROR)
     time.sleep(1)
     if show_model_menu():
         return

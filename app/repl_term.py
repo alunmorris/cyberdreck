@@ -33,14 +33,14 @@ class _TFTTerminal:
         y = view_pos * config.LINE_H
         self._tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0x0000)
         if text:
-            self._tft.write(self._font, text[:self._max_chars], 2, y, color, 0x0000)
+            self._tft.write(self._font, text, 2, y, color, 0x0000)
 
     def _full_redraw(self):
         self._tft.fill(0x0000)
         start = self._view_start()
         for i, (line, col) in enumerate(self._lines[start : start + config.MAX_VIS]):
             if line:
-                self._tft.write(self._font, line[:self._max_chars], 2, i * config.LINE_H, col, 0x0000)
+                self._tft.write(self._font, line, 2, i * config.LINE_H, col, 0x0000)
 
     def scroll_up(self, n=1):
         max_scroll = max(0, len(self._lines) - config.MAX_VIS)
@@ -218,11 +218,18 @@ def run(tft, kb):
         vs = term._view_start()
         vp = (n - 1) - vs
         if 0 <= vp < config.MAX_VIS:
-            y = vp * config.LINE_H
+            y      = vp * config.LINE_H
+            avail  = config.SCREEN_W - 4
+            cur_abs = len(p) + cur_pos
+            start  = cur_abs
+            while start > 0:
+                if tft.write_len(font14, text[start - 1:cur_abs]) > avail - 2:
+                    break
+                start -= 1
             tft.fill_rect(0, y, config.SCREEN_W, config.LINE_H, 0x0000)
             if text:
-                tft.write(font14, text[:term._max_chars], 2, y, config.COL_USER, 0x0000)
-            cx = 2 + tft.write_len(font14, (p + cur[:cur_pos])[:term._max_chars])
+                tft.write(font14, text[start:], 2, y, config.COL_USER, 0x0000)
+            cx = 2 + tft.write_len(font14, text[start:cur_abs])
             tft.fill_rect(cx, y + 2, 1, config.LINE_H - 4, config.COL_USER)
 
     _draw_input()

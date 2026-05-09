@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-PORT=${1:-/dev/ttyUSB0}
+PORT=${1:-/dev/ttyACM0}
 APP=/home/alun/esp32/micropython/app
 
 echo "Uploading to $PORT..."
@@ -12,6 +12,7 @@ mpremote connect $PORT cp $APP/display.py          :display.py
 mpremote connect $PORT cp $APP/writer.py           :writer.py
 mpremote connect $PORT cp $APP/fonts/dejavu14.py   :fonts/dejavu14.py
 mpremote connect $PORT cp $APP/fonts/dejavu14_ru.py :fonts/dejavu14_ru.py
+mpremote connect $PORT cp $APP/fonts/dejavu24bold_ru.py :fonts/dejavu24bold_ru.py
 mpremote connect $PORT cp $APP/fonts/mono13.py     :fonts/mono13.py
 mpremote connect $PORT cp $APP/history.py          :history.py
 mpremote connect $PORT cp $APP/ui.py               :ui.py
