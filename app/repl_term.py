@@ -125,7 +125,8 @@ class _TFTTerminal:
                 else:
                     self._lines[self._cur_line][0] = text + ch
                 self._col += 1
-                if self._col >= self._max_chars:
+                cur_text = self._lines[self._cur_line][0]
+                if self._tft.write_len(self._font, cur_text) >= config.SCREEN_W - 4:
                     if self._cur_line == len(self._lines) - 1:
                         self._lines.append(['', color])
                         if len(self._lines) > _BUF_LINES:
@@ -163,7 +164,7 @@ def run(tft, kb):
     def out(s, color=config.COL_AI):
         term.write(s, color)
 
-    out('MicroPython REPL. ctrl-D to exit\n')
+    out('MicroPython REPL')
     out("run('xxx.py') to run a python file\n", 0x07E0)
     out('ls() to see user files\n', 0x07E0)
 

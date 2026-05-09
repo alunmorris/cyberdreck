@@ -1,10 +1,10 @@
-# getprog.py — download user programs from github.com/alunmorris/crack-programs
+# getprog.py — download user programs from github.com/alunmorris/cyberdreck-programs
 #300426 Change exit text to 'Menu'
 import socket, ssl, json, gc
 import wifi_mgr
 
 REPO_HOST = "raw.githubusercontent.com"
-REPO_BASE = "/alunmorris/crack-programs/main"
+REPO_BASE = "/alunmorris/cyberdreck-programs/main"
 
 def _https_get(host, path):
     """Simple HTTPS GET — returns response body as bytes."""
