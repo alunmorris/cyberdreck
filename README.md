@@ -34,7 +34,7 @@ app/            MicroPython application source
   wifi_mgr.py   WiFi credential management
   fonts/        Pre-converted russhughes-format bitmap fonts
 firmware/       ESP32-S2 board config and build scripts
-userapp/        Community user programs (downloaded via getprog.py)
+examples/       Example user programs (downloaded via getprog.py)
 tools/          Upload scripts and VFS image builder
 tests/          Host-side unit tests
 ```
@@ -69,7 +69,7 @@ bash tools/upload.sh /dev/ttyACM0   # or /dev/ttyUSB0
 
 ## User Programs
 
-User programs live in `userapp/` and are listed in `userapp/manifest.json`. They can be downloaded directly to the device via the **Get Program** menu option, which fetches from [cyberdreck-programs](https://github.com/alunmorris/cyberdreck-programs).
+Example programs live in `examples/` and are listed in `examples/manifest.json`. They can be downloaded directly to the device via the **Get Program** menu option, which fetches from [cyberdreck-programs](https://github.com/alunmorris/cyberdreck-programs).
 
 Current programs:
 
@@ -78,7 +78,6 @@ Current programs:
 | `sysinfo.py` | Memory and WiFi status |
 | `airquality.py` | Air quality for Lecco, Italy |
 | `oled-i2c-test.py` | SSD1306 128×32 OLED test (SDA=GPIO6, SCL=GPIO7) |
-| `sim800l-sms.py` | SIM800L GSM — list received SMS (TX=GPIO8, RX=GPIO9) |
 
 ## Key Bindings
 

@@ -10,9 +10,5 @@
   {
     "file": "oled-i2c-test.py",
     "desc": "SSD1306 128x32 OLED test on I2C (SDA=GPIO6, SCL=GPIO7)"
-  },
-  {
-    "file": "sim800l-sms.py",
-    "desc": "SIM800L GSM: list received SMS (TX=GPIO8, RX=GPIO9)"
   }
 ]
