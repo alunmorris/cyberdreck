@@ -1,6 +1,6 @@
-# crack-programs
+# cyberdreck-examples
 
-User programs for the [CRACK](https://github.com/alunmorris/crack) ESP32-S2 AI device.
+User programs for the [Cyberdreck](https://github.com/alunmorris/cyberdreck) ESP32-S2 AI device.
 
 ## Installing programs
 
@@ -19,5 +19,5 @@ On the device, open the model menu and press **r** to open the file picker. Run
 
 ## Writing programs
 
-See `docs/user_programs.md` in the main CRACK repo for the full API reference —
+See `docs/user_programs.md` in the main Cyberdreck repo for the full API reference —
 available globals, ANSI escapes, monospaced terminal, GPIO, and network access.
