@@ -85,7 +85,6 @@ Current programs:
 |-----|--------|
 | Up/Down cursor | Scroll history / navigate menus |
 | Enter | Send message / confirm |
-| Esc / Menu key | Open model menu |
 | Delete | Delete file (file manager) |
 
 ## License
