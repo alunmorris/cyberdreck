@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 PORT=${1:-/dev/ttyACM0}
-APP=/home/alun/esp32/micropython/app
+APP="$(dirname "$0")/../app"
 
 echo "Uploading to $PORT..."
 mpremote connect $PORT mkdir :fonts 2>/dev/null || true

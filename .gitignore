@@ -1,1 +1,10 @@
 app/secrets.py
+app/__pycache__/
+app/fonts/__pycache__/
+*.pyc
+*.pyo
+tools/vfs.img
+*Zone.Identifier
+*.bak
+firmware/build/
+__pycache__/

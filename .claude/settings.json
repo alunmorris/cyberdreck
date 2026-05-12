@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(~/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-objdump *)",
+      "Bash(~/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-readelf *)",
+      "Bash(~/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-nm *)"
+    ]
+  }
+}
